@@ -1,7 +1,13 @@
 {
+  "title": "이 편집기에서 만든 영상",
+  "hint": "♥ 좋아요를 눌러 주세요",
   "form": "https://docs.google.com/forms/d/e/1FAIpQLSe6IN4A2xKZyRq-DrhXrZq3ip1I10et8-YJ5rBFklH-crjtBg/viewform",
   "sheet": "https://docs.google.com/spreadsheets/d/1k2Xvm4_xkdn5iD5ayi-9iunov8h0yjKQGa5l57kSl98/edit",
-  "send": { "name": "entry.762308496", "title": "entry.1841745288", "link": "entry.1112031157" },
+  "send": {
+    "name": "entry.762308496",
+    "title": "entry.1841745288",
+    "link": "entry.1112031157"
+  },
   "like": {
     "form": "https://docs.google.com/forms/d/e/1FAIpQLScPRs_cEGMiURkU6-u2ASVUTDBGVKFr6iKY6_Qlj0Re_0a4kQ/viewform",
     "video": "entry.1020281082",

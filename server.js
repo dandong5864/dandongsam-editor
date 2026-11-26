@@ -1065,7 +1065,8 @@ async function examplesWithLikes() {
   items.sort((a, b) => b.n - a.n || a.i - b.i);
   let rank = 0, prev = -1; items.forEach((it) => { if (it.n > 0) { if (it.n !== prev) { rank++; prev = it.n; } it.rank = rank; } });
   const lk = exCfg && exCfg.like || {}, sd = exCfg && exCfg.send || {};
-  return { form: base.form, more: base.more, canLike: !!(formPostUrl(lk.form) && lk.video), canSend: !!(formPostUrl(sd.form || base.form) && sd.link),
+  const tx = (v) => String(v || '').replace(/[<>]/g, '').trim().slice(0, 40);
+  return { title: tx(exCfg && exCfg.title), hint: tx(exCfg && exCfg.hint), form: base.form, more: base.more, canLike: !!(formPostUrl(lk.form) && lk.video), canSend: !!(formPostUrl(sd.form || base.form) && sd.link),
     list: items.slice(0, 12).map(({ n, i, ...x }) => x) };   // 숫자는 보내지 않고 순위만 보내요
 }
 async function examplesFeed() {

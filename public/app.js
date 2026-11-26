@@ -2249,9 +2249,10 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const ok = E('button', 'primary', '저장'); ok.onclick = () => { const v = i.value.trim(); if (!v) return; setLinks({ blog: v }); show(); }; f.append(i, ok); bg.append(f);
     } else { bg.append(E('div', 'hm-empty', '불러오는 중…')); fetch('/api/feed/blog?url=' + encodeURIComponent(bu)).then((r) => r.json()).catch(() => ({ list: [] })).then((r) => cardList('블로그', bu, r.list || [], bg)); }
     // 자동 편집 예시 영상 (목록: public/examples.json) — 좋아요 많은 순서로, 숫자 없이 순위만 보여 줘요
-    const xh = E('div', 'hm-h ex'); xh.append(E('h3', '', '<i>✨</i>이 편집기에서 만든 영상')); xc.append(xh); xc.append(E('div', 'hm-sub', '♥ 좋아요를 눌러 주세요'));
+    const xh = E('div', 'hm-h ex'); const xt = E('h3', '', '<i>✨</i><span>이 편집기에서 만든 영상</span>'); xh.append(xt); xc.append(xh); const xs = E('div', 'hm-sub', '♥ 좋아요를 눌러 주세요'); xc.append(xs);
     const xg = E('div', 'hm-grid cards'); xc.append(xg); xg.append(E('div', 'hm-empty', '불러오는 중…'));
     fetch('/api/feed/examples').then((r) => r.json()).catch(() => ({ list: [] })).then((r) => {
+      if (r.title) xt.querySelector('span').textContent = r.title; if (r.hint) xs.textContent = r.hint;   // 칸 이름·안내 문구는 examples.json에서 바꿀 수 있어요
       if (r.canSend || r.form) { const fb = E('button', 'hm-link', '🙌 내 영상 자랑하기'); fb.title = '자동 편집으로 만든 영상 링크를 보내 주세요'; fb.onclick = () => (r.canSend ? brag() : open(r.form)); xh.append(fb); }
       if (r.more) { const xb = E('button', 'hm-link', '전체 보기 ↗'); xb.onclick = () => open(r.more); xh.append(xb); }
       xg.innerHTML = ''; const l = r.list || [];
