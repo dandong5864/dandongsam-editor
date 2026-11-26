@@ -336,7 +336,7 @@ function syncPip() {
   Object.keys(pipEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'pip')) { pipEls[id].pause(); pipEls[id].remove(); delete pipEls[id]; } });
 }
 let ttlTxt = '', ttlSmall = null, ttlColor = '#000000';
-const CARD_RECS = [{ n: 'STEP 번호 + 제목', col: '#1f6feb', small: 'STEP {n}', title: '' }, { n: '정리하기', col: '#00C48C', small: '정리', title: '' }, { n: '마무리 인사', col: '#ff2d92', small: '', title: '감사합니다' }, { n: '자료 받기', col: '#FFFD00', small: '설명란 또는 고정댓글 확인', title: '자료 받기' }];
+const CARD_RECS = [{ n: 'STEP 번호 + 제목', col: '#1f6feb', small: 'STEP {n}', title: '' }, { n: '정리하기', col: '#00C48C', small: '정리', title: '' }, { n: '마무리 인사', col: '#ff2d92', small: '', title: '감사합니다' }, { n: '자료 받기', col: '#FFFD00', small: '설명란 또는 고정댓글을 확인해주세요.', title: '자료 받기', low: true }];
 const cardFg = (c) => { const h = c.replace('#', ''), l = (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000; return l > 150 ? '#111111' : '#ffffff'; };
 const CARD_SEC = 2.5, CARD_VOL = 60;   // 제목 화면: 기본 2.5초, 시작할 때 효과음(뿅) 볼륨 60%
 let cardSfxId = null;
@@ -364,11 +364,11 @@ async function insertCard({ color, sec, items }) {
   if (last) S.sel = { type: 't', id: last.id };
   changed(true); if (ltab === 'tpl') buildLeft();
 }
-function addTitleCard(title, small, color) {   // 강의 단계가 바뀔 때: 색 배경 + 가운데 제목(+위쪽 작은 글)
+function addTitleCard(title, small, color, low) {   // 강의 단계가 바뀔 때: 색 배경 + 가운데 제목(+위쪽 작은 글)
   const hx = color.replace('#', ''), lum = (parseInt(hx.slice(0, 2), 16) * 299 + parseInt(hx.slice(2, 4), 16) * 587 + parseInt(hx.slice(4, 6), 16) * 114) / 1000, fg = lum > 150 ? '#111111' : '#ffffff';
   const sample = S.texts.find((t) => t.kind === 'text'), font = sample ? sample.font : ((S.fonts[0] && S.fonts[0].family) || 'sans-serif');
   const mk = (text, size, y) => ({ kind: 'text', off: 0, len: CARD_SEC, text, colors: [], color: fg, font, size, outline: 0, outlineColor: '#000000', x: 50, y });
-  const items = []; if (small) items.push(mk(small, 56, 36)); if (title) items.push(mk(title, 120, small ? 52 : 50));
+  const items = []; if (low) { if (title) items.push(mk(title, 120, 42)); if (small) items.push(mk(small, 56, 64)); } else { if (small) items.push(mk(small, 56, 36)); if (title) items.push(mk(title, 120, small ? 52 : 50)); }
   return insertCard({ color, sec: CARD_SEC, items });
 }
 const CARD_KEY = 'vtk.cards.v1';
@@ -1138,8 +1138,8 @@ function bgControls(p) {
   const tb = E('button', 'primary bigbtn', '＋ 제목 화면 추가'); tb.onclick = () => { addTitleCard(ttlTxt.trim(), ttlSmall == null ? 'STEP ' + nxt : ttlSmall.trim(), ttlColor); ttlSmall = null; }; p.append(tb);
   p.append(sec('추천 제목 화면'));
   const rec = E('div', 'tplcol');
-  CARD_RECS.map((c) => [c.n, c.col, () => c.small.replace('{n}', nxt), c.title]).forEach(([n, col, sm, ti]) => {
-    const r = E('div', 'tplrow'), bt = E('button', 'tplpick', esc(n)); bt.onclick = () => { addTitleCard(ttlTxt.trim() || ti || '제목을 입력하세요', sm(), col); ttlSmall = null; }; r.append(bt); rec.append(r);
+  CARD_RECS.map((c) => [c.n, c.col, () => c.small.replace('{n}', nxt), c.title, c.low]).forEach(([n, col, sm, ti, low]) => {
+    const r = E('div', 'tplrow'), bt = E('button', 'tplpick', esc(n)); bt.onclick = () => { addTitleCard(ttlTxt.trim() || ti || '제목을 입력하세요', sm(), col, low); ttlSmall = null; }; r.append(bt); rec.append(r);
   });
   p.append(rec);
   p.append(sec('내 제목 화면'));
@@ -2015,7 +2015,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         if (!lecture || cardKey === 'none') return null;
         if (cardKey[0] === 'm') { const c = cardsL[+cardKey.slice(1)]; return { name: c.n, items: c.items }; }
         const c = CARD_RECS[+cardKey.slice(1)], fg = cardFg(c.col);
-        return { name: c.n, seconds: 2.5, bg: { kind: 'bg', color: c.col, opacity: 100 }, small: c.small ? { kind: 'text', text: c.small, size: 56, y: 36, x: 50, color: fg, outline: 0 } : null, title: { kind: 'text', text: c.title || '(그 단계의 주제 이름)', size: 120, y: c.small ? 52 : 50, x: 50, color: fg, outline: 0 } };
+        return { name: c.n, seconds: 2.5, bg: { kind: 'bg', color: c.col, opacity: 100 }, small: c.small ? { kind: 'text', text: c.small, size: 56, y: c.low ? 64 : 36, x: 50, color: fg, outline: 0 } : null, title: { kind: 'text', text: c.title || '(그 단계의 주제 이름)', size: 120, y: c.low ? 42 : c.small ? 52 : 50, x: 50, color: fg, outline: 0 } };
       })();
       const cardSum = !stepCard ? '' : stepCard.items ? '내 제목 화면 · 배경 ' + ((stepCard.items.find((q) => q.kind === 'bg') || {}).color || '없음') + ' · 글자 ' + stepCard.items.filter((q) => q.kind === 'text').length + '개' : '배경 ' + stepCard.bg.color + ' · 위쪽 글 ' + (stepCard.small ? '"' + stepCard.small.text.replace('{n}', '번호') + '"' : '없음') + ' · 제목 크기 ' + stepCard.title.size + ' · 글자색 ' + (cardFg(stepCard.bg.color) === '#ffffff' ? '흰색' : '검정') + ' · ' + stepCard.seconds + '초';
       const styleOfKey = (k, list, def) => { if (k === 'shorts') return SHORTSUB; if (k === 'def' || k === 'preset') return def; const v = { kind: def.kind, ...list[+k.slice(1)].v }; return v; };   // 내 스타일은 저장한 값 그대로 써요 (가로라고 자동으로 줄이지 않아요)
