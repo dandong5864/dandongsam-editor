@@ -333,6 +333,22 @@ function addTitleCard(title, small, color) {   // 강의 단계가 바뀔 때: �
   if (title) { sel = mk(title, 120, small ? 52 : 50); S.texts.push(sel); }
   S.sel = { type: 't', id: sel.id }; changed(true); if (ltab === 'tpl') buildLeft();
 }
+const CARD_KEY = 'vtk.cards.v1';
+const myCards = () => { try { return JSON.parse(localStorage.getItem(CARD_KEY) || '[]'); } catch (e) { return []; } };
+const saveMyCards = (l) => { try { localStorage.setItem(CARD_KEY, JSON.stringify(l)); } catch (e) {} };
+function saveCard(name) {   // 지금 고른 제목 화면(배경+글자)을 내 템플릿으로 저장
+  const s = getSel(); if (!s || s.type !== 't' || !['bg', 'text'].includes(s.c.kind)) return toast('저장할 제목 화면(배경이나 글자)을 타임라인에서 먼저 눌러 주세요');
+  const a = s.c.start, b = s.c.end, its = S.texts.filter((x) => (x.kind === 'bg' || x.kind === 'text') && x.start < b - 1e-6 && a < x.end - 1e-6);
+  const base = Math.min(...its.map((x) => x.start));
+  const items = its.map((x) => { const o = JSON.parse(JSON.stringify(x)); o.off = Math.round((x.start - base) * 100) / 100; o.len = Math.round((x.end - x.start) * 100) / 100; ['id', 'start', 'end'].forEach((k) => delete o[k]); return o; });
+  const l = myCards().filter((c) => c.n !== name); l.push({ n: name, items }); saveMyCards(l); toast('내 제목 화면으로 저장했어요');
+}
+function addCard(c) {
+  push(); layout(); const t0 = Math.round(S.t * 100) / 100; let last = null;
+  const big = c.items.filter((x) => x.kind === 'text').sort((p, q) => (q.size || 0) - (p.size || 0))[0], ti = ttlTxt.trim();
+  c.items.forEach((o) => { const x = JSON.parse(JSON.stringify(o)); x.id = nid(); x.start = Math.round((t0 + (o.off || 0)) * 100) / 100; x.end = Math.round((x.start + (o.len || 3)) * 100) / 100; delete x.off; delete x.len; if (ti && o === big) x.text = ti; S.texts.push(x); last = x; });
+  if (last) S.sel = { type: 't', id: last.id }; changed(true); if (ltab === 'tpl') buildLeft();
+}
 function addBg(color) {
   push(); layout(); const st = Math.round(S.t * 100) / 100, x = { id: nid(), kind: 'bg', start: st, end: Math.round((st + 3) * 100) / 100, color: color || '#1f6feb', opacity: 100, lane: 0 };
   S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(); renderProps(); if (ltab === 'tpl') buildLeft();
@@ -1078,6 +1094,10 @@ function bgControls(p) {
     const r = E('div', 'tplrow'), bt = E('button', 'tplpick', esc(n)); bt.onclick = () => { addTitleCard(ttlTxt.trim() || ti || '제목을 입력하세요', sm(), col); ttlSmall = null; }; r.append(bt); rec.append(r);
   });
   p.append(rec);
+  p.append(sec('내 제목 화면'));
+  const cl = myCards(); if (cl.length) { const col = E('div', 'tplcol'); cl.forEach((c, i) => { const r = E('div', 'tplrow'), bt = E('button', 'tplpick', '⭐ ' + esc(c.n)); bt.onclick = () => addCard(c); const dx = E('button', 'tpldel', '×'); dx.title = '삭제'; dx.onclick = () => { const l = myCards(); l.splice(i, 1); saveMyCards(l); buildLeft(); }; r.append(bt, dx); col.append(r); }); p.append(col); }
+  const cr = E('div', 'savetpl'), cn = E('input'); cn.type = 'text'; cn.placeholder = '이름 (예: 우리 채널 단계 화면)'; cn.maxLength = 20; cn.onkeydown = (e) => e.stopPropagation();
+  const cb = E('button', 'primary', '＋ 저장'); cb.onclick = () => { const n = cn.value.trim(); if (!n) return toast('이름을 적어 주세요'); saveCard(n); buildLeft(); }; cr.append(cn, cb); p.append(cr);
   p.append(sec('배경'));
   const sw = E('div', 'bgsw'); ['#1f6feb', '#ffffff', '#000000', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b'); b.style.background = c; b.title = c; b.onclick = () => addBg(c); sw.append(b); }); p.append(sw);
   const ab = E('button', 'primary bigbtn', '＋ 배경 추가'); ab.onclick = () => addBg(); p.append(ab);
