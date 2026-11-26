@@ -933,12 +933,24 @@ async function examplesFeed() {
     if (!title && id) { try { title = JSON.parse(await httpGet('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))).title || ''; } catch (e) {} }
     list.push({ title: title || '자동 편집 예시', url: id ? (/\/shorts\//.test(it.url) ? 'https://www.youtube.com/shorts/' + id : 'https://www.youtube.com/watch?v=' + id) : it.url, thumb: it.thumb || (id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : '') });
   }
+  // 사이트 주소(page)를 넣으면 그 페이지에 있는 동영상 링크(유튜브·mp4 등)만 골라서 순서대로 보여 줘요
+  for (const pg of [].concat(cfg.page || [])) {
+    try {
+      const html = (await httpGet(/^https?:\/\//i.test(pg) ? pg : 'https://' + pg)).replace(/\\\//g, '/').replace(/&amp;/g, '&');
+      const re = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^"'\s<>]*?&)?v=|shorts\/|embed\/|live\/))([\w-]{11})|(https?:\/\/[^"'\s<>]+\.(?:mp4|webm|mov)(?:\?[^"'\s<>]*)?)/gi; let m;
+      while ((m = re.exec(html)) && list.length < 24) {
+        if (m[1]) { const id = m[1]; if (list.some((x) => x.url.includes(id))) continue; let title = ''; try { title = JSON.parse(await httpGet('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))).title || ''; } catch (e) {}
+          list.push({ title: title || '자동 편집 예시', url: (/shorts\//i.test(m[0]) ? 'https://www.youtube.com/shorts/' : 'https://www.youtube.com/watch?v=') + id, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }); }
+        else if (!list.some((x) => x.url === m[2])) list.push({ title: decodeURIComponent(m[2].split('?')[0].split('/').pop()).replace(/\.\w+$/, ''), url: m[2], thumb: '' });
+      }
+    } catch (e) {}
+  }
   const pl = String(cfg.playlist || '').match(/(?:list=)?((?:PL|UU|OL|FL)[\w-]{10,})/);
   if (pl) {
     try { const xml = await httpGet('https://www.youtube.com/feeds/videos.xml?playlist_id=' + pl[1]); const re = /<entry>([\s\S]*?)<\/entry>/g; let m;
       while ((m = re.exec(xml))) { const id = (/<yt:videoId>([^<]+)</.exec(m[1]) || [])[1]; const t = (/<title>([\s\S]*?)<\/title>/.exec(m[1]) || [])[1]; if (id && !list.some((x) => x.url.includes(id))) list.push({ title: xmlText(t), url: 'https://www.youtube.com/watch?v=' + id, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }); } } catch (e) {}
   }
-  return { list: list.slice(0, 12), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || '') };
+  return { list: list.slice(0, 12), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || [].concat(cfg.page || [])[0] || '') };
 }
 
 // ---- 음성 → 자막 (Whisper large-v3-turbo, 내 컴퓨터에서 실행) ----
