@@ -1333,6 +1333,7 @@ function buildSubPane(d) {
     d.append(E('h4', '', `자막 목록 (${S.texts.filter((x) => x.kind === 'sub').length}개)`));
     const ss = S.texts.filter((x) => x.kind === 'sub').sort((p, q) => p.start - q.start); if (!ss.length) d.append(E('div', 'hint', '아직 없어요')); ss.forEach((x) => d.append(subRow(x)));
 }
+let stkSec = 'shape';
 function buildLeft() {
   const b = $('#lbody'); b.innerHTML = '';
   if (ltab === 'media') {
@@ -1351,8 +1352,18 @@ function buildLeft() {
     d.append(E('h4', '', '넣은 텍스트'));
     const ts = S.texts.filter((x) => x.kind === 'text'); if (!ts.length) d.append(E('div', 'hint', '아직 없어요')); ts.forEach((x) => d.append(itemRow(x)));
   } else if (ltab === 'stk') {
-    const d = E('div', 'pane'); b.append(d);
-    d.append(E('h4', '', '도형'));
+    const ss = S.texts.filter((x) => x.kind === 'sticker').sort((p, q) => p.start - q.start);
+    if (stkSec === 'used' && !ss.length) stkSec = 'shape';
+    const pane = E('div', 'pane stkwrap'); b.append(pane); const nav = E('div', 'stknav'), d = E('div', 'stkbody'); pane.append(nav, d);
+    const secs = {};
+    const mkSec = (k, label) => {
+      const w = E('div', 'stksec'); w.style.display = stkSec === k ? '' : 'none'; secs[k] = w;
+      const nb = E('button', 'stknb' + (stkSec === k ? ' on' : ''), label); nb.dataset.k = k;
+      nb.onclick = () => { stkSec = k; Object.keys(secs).forEach((q) => { secs[q].style.display = q === k ? '' : 'none'; }); nav.querySelectorAll('.stknb').forEach((x) => x.classList.toggle('on', x.dataset.k === k)); };
+      nav.append(nb); d.append(w); return { w, nb };
+    };
+    const sShape = mkSec('shape', '도형'), sKbd = mkSec('kbd', '키보드형\n단축키'), sTxt = mkSec('txt', '텍스트형\n단축키'), sMine = mkSec('mine', '내 이미지'), sUsed = mkSec('used', '넣은 스티커');
+    sMine.nb.style.display = 'none'; sKbd.nb.style.display = sTxt.nb.style.display = 'none'; if (!ss.length) sUsed.nb.style.display = 'none';
     const sg = E('div', 'chips shapes');
     const SV = (vb, inner, st) => `<svg viewBox="${vb}" width="30" height="30" fill="${st ? 'none' : 'currentColor'}" ${st ? 'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"' : ''}>${inner}</svg>`;
     const SHI = {
@@ -1369,27 +1380,27 @@ function buildLeft() {
       handclick: SV('0 0 100 130', `<path d="${HAND_D}" transform="translate(0 10)" stroke-width="7"/><path d="M43 8V0M33 12L27 6M53 12l6-6M29 22h-8M57 22h8" stroke-width="7"/>`, 1),
     };
     Object.keys(SHI).forEach((v) => { const b = E('button', 'chip', SHI[v]); b.title = SHAPE_NAMES[v]; b.onclick = () => addShape(v); sg.append(b); });
-    d.append(sg);
-    const mh = E('h4', '', '내 이미지'), g = E('div', 'stk-grid'); mh.style.display = g.style.display = 'none'; d.append(mh, g);
+    sShape.w.append(sg);
+    const g = E('div', 'stk-grid'); sMine.w.append(g);
     const trash = E('div', 'stk-trash', '🗑 삭제'); trash.style.display = 'none'; trash.ondragover = (e) => { e.preventDefault(); trash.classList.add('over'); }; trash.ondragleave = () => trash.classList.remove('over'); trash.ondrop = (e) => { e.preventDefault(); trash.style.display = 'none'; trash.classList.remove('over'); if (trash._del) trash._del(); };
-    const kh = E('h4', '', '키보드형 단축키'), kg = E('div', 'stk-grid stk-names'), th = E('h4', '', '텍스트형 단축키'), tg = E('div', 'stk-grid stk-names'); [kh, kg, th, tg].forEach((n) => { n.style.display = 'none'; }); d.append(kh, kg, th, tg, trash);
+    const kg = E('div', 'stk-grid stk-names'), tg = E('div', 'stk-grid stk-names'); sKbd.w.append(kg); sTxt.w.append(tg); d.append(trash);
     const drag0 = (e, st) => { dragKind = 'sticker'; e.dataTransfer.setData('text/x-vtk', JSON.stringify({ k: 'sticker', st })); e.dataTransfer.effectAllowed = st.builtin ? 'copy' : 'copyMove'; };
     fetch('/api/stickers').then((r) => r.json()).then((l) => {
       l.forEach((st) => {
         if (st.builtin) {   // 편집기에 들어 있는 단축키 스티커: 같은 크기 글자 칸으로 보여줘요
           const t = E('button', 'stk-name', esc(st.id.replace(/\.[^.]+$/, '').replace(/^[^_]*_/, ''))); t.onclick = () => addSticker(st); t.draggable = true; t.ondragstart = (e) => drag0(e, st);
-          const k = st.id.startsWith('단축키_'); (k ? kg : tg).append(t); (k ? kh : th).style.display = (k ? kg : tg).style.display = ''; return;
+          const k = st.id.startsWith('단축키_'); (k ? kg : tg).append(t); (k ? sKbd : sTxt).nb.style.display = ''; return;
         }
-        mh.style.display = g.style.display = '';
+        sMine.nb.style.display = '';
         const t = E('button', 'stk-tile'); t.title = st.name; const im = E('img'); im.src = '/api/sticker/file?n=' + encodeURIComponent(st.id); im.draggable = false; t.append(im); if (st.gif) t.append(E('span', 'gb', 'GIF'));
         const rm = E('span', 'stk-rm', '✕'); rm.title = '이 이미지 지우기';
         const doDel = async () => { const used = S.texts.filter((x) => x.kind === 'sticker' && x.sid === st.id); if (!(await ask('이 이미지를 목록에서 지울까요?' + (used.length ? '\n타임라인에 넣은 ' + used.length + '개도 함께 지워져요.' : ''), { danger: true, ok: '삭제' }))) return; const r = await fetch('/api/sticker/delete?n=' + encodeURIComponent(st.id), { method: 'POST' }).then((z) => z.json()).catch(() => ({})); if (!r.ok) return toast(r.error || '지우지 못했어요'); if (used.length) { push(); S.texts = S.texts.filter((x) => !(x.kind === 'sticker' && x.sid === st.id)); S.sel = null; changed(); } toast('지웠어요'); buildLeft(); };
         rm.onclick = (e) => { e.stopPropagation(); e.preventDefault(); doDel(); }; t.append(rm); t.onclick = () => addSticker(st); t.draggable = true;
         t.ondragstart = (e) => { drag0(e, st); trash._del = doDel; trash.style.display = 'flex'; }; t.ondragend = () => { trash.style.display = 'none'; trash.classList.remove('over'); }; g.append(t);
       });
+      if (stkSec === 'mine' && sMine.nb.style.display === 'none') sShape.nb.click();
     }).catch(() => {});
-    const ss = S.texts.filter((x) => x.kind === 'sticker').sort((p, q) => p.start - q.start);
-    if (ss.length) { d.append(E('h4', '', '넣은 스티커')); ss.forEach((x) => { const r = E('div', 'titem' + (isSel('t', x.id) ? ' sel' : '')); r.append(E('span', 'tm', fmt(x.start, 1)), E('span', 'tx', esc(x.name || ''))); r.onclick = () => { select('t', x.id); seek(x.start + 0.01); }; d.append(r); }); }
+    if (ss.length) { ss.forEach((x) => { const r = E('div', 'titem' + (isSel('t', x.id) ? ' sel' : '')); r.append(E('span', 'tm', fmt(x.start, 1)), E('span', 'tx', esc(x.name || ''))); r.onclick = () => { select('t', x.id); seek(x.start + 0.01); }; sUsed.w.append(r); }); }
   } else if (ltab === 'fx') {
     const d = E('div', 'pane'); b.append(d); buildFxTab(d);
   } else if (ltab === 'tpl') {
