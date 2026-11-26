@@ -1,0 +1,15 @@
+{
+  "name": "video-toolkit",
+  "version": "1.0.1",
+  "private": true,
+  "description": "캡컷 스타일 로컬 영상 편집기",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@fugood/whisper.node": "1.2.0-rc.2",
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
+  }
+}

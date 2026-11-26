@@ -1,0 +1,7 @@
+node_modules/
+workspace/
+내보내기/
+캡처/
+samples/
+*.exe
+*.zip

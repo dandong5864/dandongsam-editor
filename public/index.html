@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>단동샘 편집기</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div class="top-left">
+    <div class="brand"><span class="logo">▶</span> 단동샘 편집기</div>
+    <button id="btn-save" class="ghost" title="지금 작업 저장 (Ctrl+S)">💾 저장</button>
+    <button id="btn-proj" class="ghost" title="저장한 프로젝트 열기 · 파일로 내보내기">📁 프로젝트</button>
+    <button id="btn-new" class="ghost" title="타임라인 비우기">🗒 새 프로젝트</button>
+    <button id="btn-auto" class="ghost auto" title="AI(Claude 등)에게 영상 편집을 맡기고 결과를 열어요">AI 자동 편집</button>
+  </div>
+  <div class="top-actions">
+    <button id="btn-help" class="ghost" title="사용법 영상·웹페이지 열기">❓ 사용법</button>
+    <button id="btn-keys" class="ghost" title="단축키 보기 (?)">⌨ 단축키</button>
+    <button id="btn-capture" class="ghost" title="현재 장면 캡처 (Ctrl+P)">📷 캡처</button>
+    <button id="btn-export" class="primary" title="내보내기 (Ctrl+E)">내보내기</button>
+  </div>
+</header>
+
+<main id="main">
+  <aside id="media" class="panel">
+    <nav id="ltabs">
+      <button data-tab="media" class="on"><i>🎞</i>미디어</button>
+      <button data-tab="audio"><i>🎵</i>오디오</button>
+      <button data-tab="text"><i>🅣</i>텍스트</button>
+      <button data-tab="stk"><i>🖼</i>스티커</button>
+            <button data-tab="fx"><i>✨</i>효과</button>
+      <button data-tab="tpl"><i>🎨</i>템플릿</button>
+    </nav>
+    <div id="lbody"></div>
+  </aside>
+
+  <div class="gut gv" id="g-left" title="끌어서 왼쪽 칸 너비 조절 (더블클릭: 원래대로)"></div>
+  <section id="player">
+    <div id="stage-wrap">
+      <div id="stage">
+        <div id="tplbg"></div>
+        <canvas id="bgc"></canvas>
+        <div id="vbox"><video id="video" playsinline preload="auto"></video></div>
+        <div id="trfx"></div>
+        <div id="tplfg"></div>
+        <div id="ov"></div>
+        <div id="empty">
+          <div class="big">🎬</div>
+          <div class="t1">영상을 끌어다 놓으세요</div>
+          <div class="t2">또는 여기를 눌러 파일 선택</div>
+        </div>
+      </div>
+    </div>
+    <div id="pbar">
+      <div class="pl"><span id="tcur" class="mono">00:00.0</span><span id="ttot" class="mono dim">/ 00:00.0</span></div>
+      <div class="pc">
+        <button id="btn-prev" class="icon" title="처음으로 (Home)">⏮</button>
+        <button id="btn-play" class="icon big" title="재생/일시정지 (Space)">▶</button>
+        <button id="btn-next" class="icon" title="끝으로 (End)">⏭</button>
+      </div>
+      <label class="dim pr">화면 비율
+        <select id="sel-canvas">
+          <option value="original">원본</option>
+          <option value="16:9">16:9 (유튜브)</option>
+          <option value="9:16">9:16 (쇼츠·릴스)</option>
+          <option value="1:1">1:1 (정사각형)</option>
+          <option value="4:3">4:3</option>
+        </select>
+      </label>
+      <button id="btn-full" class="icon" title="전체 화면으로 보기 (F) · 나가기 Esc">⛶</button>
+    </div>
+  </section>
+
+  <div class="gut gv" id="g-right" title="끌어서 오른쪽 칸 너비 조절 (더블클릭: 원래대로)"></div>
+  <aside id="props" class="panel"></aside>
+</main>
+
+<div class="gut gh" id="g-tl" title="끌어서 타임라인 높이 조절 (더블클릭: 원래대로)"></div>
+<section id="timeline">
+  <div id="tl-bar">
+    <button id="t-undo" class="icon" title="실행 취소 (Ctrl+Z)">↶</button>
+    <button id="t-redo" class="icon" title="다시 실행 (Ctrl+Shift+Z)">↷</button>
+    <span class="sep"></span>
+    <button id="t-split" class="tool" title="분할 (Ctrl+B)">✂ 분할</button>
+    <button id="t-left" class="tool" title="재생 막대 앞부분 삭제 (Q)">◧ 앞 삭제</button>
+    <button id="t-right" class="tool" title="재생 막대 뒷부분 삭제 (W)">◨ 뒤 삭제</button>
+    <button id="t-del" class="tool" title="삭제 (Delete)">🗑 삭제</button>
+    <span class="sep"></span>
+    <button id="t-cpattr" class="tool" title="속성 복사 (Ctrl+Shift+C)">속성 복사</button>
+    <button id="t-pastattr" class="tool" title="속성 붙여넣기 (Ctrl+Shift+V)">속성 붙여넣기</button>
+    <span class="sep"></span>
+    <button id="t-mode" class="tool" title="분할 모드: 클릭한 곳을 바로 자름 (B) / 선택 모드 (A)">클릭 자르기 모드</button>
+    <span class="spacer"></span>
+    <button id="t-magnet" class="tool on" title="마그넷: 클립을 지우거나 길이를 줄이면 뒤에 있는 자막·텍스트·스티커·소리도 같이 당겨져요">🧲 마그넷</button>
+    <button id="t-snap" class="tool on" title="자동 스냅: 끌 때 다른 클립 끝·재생 막대에 착 붙어요">🧲 자동 스냅</button>
+    <button id="t-link" class="tool on" title="연결: 켜 두면 고른 종류(글자·효과·스티커·추가 미디어·소리)가 메인 영상을 따라 움직이고 지워져요">🔗 연결</button><button id="t-linkset" class="tool" title="연결 설정">▾</button>
+    <span class="sep"></span>
+    <button id="t-zout" class="icon" title="축소 (Ctrl+-)">−</button>
+    <input id="t-zoom" type="range" min="2" max="400" step="1">
+    <button id="t-zin" class="icon" title="확대 (Ctrl+=)">＋</button>
+    <button id="t-fit" class="tool" title="전체 보기 (Shift+Z)">전체</button>
+  </div>
+  <div id="tl-wrap">
+    <div id="tl-labels">
+      <div class="lab ruler-lab"></div>
+      <div class="lab k">스티커</div>
+      <div class="lab t">텍스트</div>
+      <div class="lab s">자막</div>
+      <div class="lab p">추가</div>
+      <div class="lab v">영상</div>
+      <div class="lab a">소리</div>
+    </div>
+    <div id="tl-scroll">
+      <div id="tl-inner">
+        <div id="ruler"></div>
+        <div id="track-k" class="track"></div>
+        <div id="track-t" class="track"></div>
+        <div id="track-s" class="track"></div>
+        <div id="track-p" class="track"></div>
+        <div id="track-v" class="track"></div>
+        <div id="track-a" class="track"></div>
+        <div id="drop-line"></div>
+        <div id="snap-line"></div>
+        <div id="playhead"><div class="ph-head"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<input id="font-input" type="file" accept=".ttf,.otf" hidden>
+<input id="file-input" type="file" accept="video/*,audio/*,image/*,.mkv,.mov,.m4a,.flac" multiple hidden>
+<div id="uploads"></div>
+<div id="toast"></div>
+<div id="modal"></div>
+<div id="veil"><div>여기에 놓으면 가져옵니다</div></div>
+<script src="app.js"></script>
+</body>
+</html>
