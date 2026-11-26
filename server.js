@@ -755,7 +755,7 @@ const SKILL_SRC = path.join(ROOT, '스킬', 'dandongsam-shorts-codex');   // 편
 function putSkill(dir) { try { if (fs.existsSync(SKILL_SRC)) fs.cpSync(SKILL_SRC, path.join(dir, '단동샘스킬'), { recursive: true, force: true }); } catch (e) {} }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '프로젝트파일_만드는법.txt'), DSP_GUIDE, 'utf8');
+  fs.writeFileSync(path.join(dir, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8');
   putSkill(dir);
 }
 function countIn(d, re) { let n = 0; try { fs.readdirSync(d, { withFileTypes: true }).forEach((e) => { if (e.isFile() && re.test(e.name)) n++; }); } catch (e) {} return n; }
@@ -1059,7 +1059,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/settings') {
       const b = await readBody(req); const d = path.resolve(String(b.path || ''));
       if (!autoAllowed(d) || !fs.existsSync(d)) return json(res, 400, { error: '폴더를 찾을 수 없어요' });
-      try { fs.writeFileSync(path.join(d, '편집설정.json'), JSON.stringify(b.settings || {}, null, 2), 'utf8'); fs.writeFileSync(path.join(d, '프로젝트파일_만드는법.txt'), DSP_GUIDE, 'utf8'); putSkill(d); } catch (e) { return json(res, 500, { error: e.message }); }
+      try { fs.writeFileSync(path.join(d, '편집설정.json'), JSON.stringify(b.settings || {}, null, 2), 'utf8'); fs.writeFileSync(path.join(d, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8'); putSkill(d); } catch (e) { return json(res, 500, { error: e.message }); }
       return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/auto/import') {
