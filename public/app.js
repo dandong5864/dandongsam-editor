@@ -5,6 +5,11 @@ const $ = (s, r = document) => r.querySelector(s);
 const E = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/* 오류 보내기용 최근 기록 (화면 쪽) */
+const CLIENT_LOG = [];
+function clientLog(kind, msg) { try { CLIENT_LOG.push(new Date().toTimeString().slice(0, 8) + ' ' + kind + ' ' + String(msg).slice(0, 400)); if (CLIENT_LOG.length > 20) CLIENT_LOG.shift(); } catch (e) {} }
+window.addEventListener('error', (e) => clientLog('화면 오류', (e.message || '') + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '')));
+window.addEventListener('unhandledrejection', (e) => clientLog('화면 오류', (e.reason && (e.reason.message || e.reason)) || ''));
 /* 버전 표시: 시작 화면과 편집 화면 왼쪽 위 이름 옆 */
 let appVer = null;
 function addVer(host) {
@@ -88,6 +93,7 @@ function showGone() {   // 편집기(서버)가 꺼졌을 때: 이유와 해결 
   setInterval(tryBack, 2000); tryBack();
 }
 function toast(msg, action, ms = 3500) {
+  if (/못|실패|오류|없어요|안 돼/.test(msg)) clientLog('알림', msg);
   if (/서버에 연결할 수 없어요/.test(msg)) return showGone();
   const t = E('div', 'toast'); t.append(E('span', '', esc(msg)));
   if (action) { const b = E('button', '', action.label); b.onclick = () => { action.fn(); t.remove(); }; t.append(b); }
@@ -1640,7 +1646,7 @@ async function startExport(o) {
   modal.dataset.lock = '1'; openModal(d);
   let id;
   try { const r = await fetch('/api/export', { method: 'POST', body: JSON.stringify(body) }).then((r) => r.json()); if (r.error) throw new Error(r.error); id = r.id; }
-  catch (e) { delete modal.dataset.lock; d.innerHTML = `<h2>내보내기 실패</h2><div class="err">${esc(e.message)}</div><div class="acts"><button id="x-ok">닫기</button></div>`; $('#x-ok').onclick = closeModal; return; }
+  catch (e) { delete modal.dataset.lock; d.innerHTML = `<h2>내보내기 실패</h2><div class="err">${esc(e.message)}</div><div class="acts"><button id="x-rep">🚩 오류 보내기</button><button id="x-ok">닫기</button></div>`; $('#x-ok').onclick = closeModal; $('#x-rep').onclick = () => reportDialog('내보내기 실패: ' + e.message); return; }
   $('#x-stop').onclick = async () => { await fetch(`/api/job/${id}/cancel`, { method: 'POST' }); clearInterval(iv); delete modal.dataset.lock; closeModal(); toast('내보내기를 중단했어요'); };
   const iv = setInterval(async () => {
     const j = await fetch('/api/job/' + id).then((r) => r.json()).catch(() => null); if (!j) return;
@@ -1651,7 +1657,7 @@ async function startExport(o) {
       $('#x-open').onclick = () => reveal(j.file); $('#x-ok').onclick = closeModal;
     } else if (j.status === 'error') {
       clearInterval(iv); delete modal.dataset.lock;
-      d.innerHTML = `<h2>내보내기 실패</h2><div class="err">${esc(j.error)}</div><div class="acts"><button id="x-ok">닫기</button></div>`; $('#x-ok').onclick = closeModal;
+      d.innerHTML = `<h2>내보내기 실패</h2><div class="err">${esc(j.error)}</div><div class="acts"><button id="x-rep">🚩 오류 보내기</button><button id="x-ok">닫기</button></div>`; $('#x-ok').onclick = closeModal; $('#x-rep').onclick = () => reportDialog('내보내기 실패: ' + j.error);
     }
   }, 500);
 }
@@ -1817,6 +1823,32 @@ setInterval(async () => {
   if (window.__home) window.__home();
   window.__vtk = { S, addText, openSample, loadFonts, seek, splitCmd, trimLeft, trimRight, del, addToTimeline, importFiles, fitAll, loadProjectData };
 })();
+/* ============ 오류 보내기 ============ */
+// 보내기 전에 내용을 보여 주고, 사용자가 고치거나 지울 수 있어요. 사용자 이름·집 폴더 경로·이메일은 가려요.
+function reportDialog(what) {
+  const d = E('div', 'dlg rep', '<h2>🚩 오류 보내기</h2>');
+  const ta = E('textarea', 'rep-ta'); ta.spellcheck = false; ta.onkeydown = (e) => e.stopPropagation(); ta.value = '불러오는 중…'; d.append(ta);
+  const note = E('div', 'rep-note', '보낼 내용이에요. 사용자 이름과 폴더 경로는 가렸어요. 보내고 싶지 않은 부분은 지워도 돼요.'); d.append(note);
+  const a = E('div', 'acts'); const c = E('button', '', '취소'); c.onclick = closeModal; const cp = E('button', '', '📋 복사'); const go = E('button', 'primary', '보내기'); go.disabled = true;
+  a.append(c, cp, go); d.append(a); openModal(d);
+  cp.onclick = async () => { try { await navigator.clipboard.writeText(ta.value); toast('복사했어요'); } catch (e) { ta.select(); document.execCommand('copy'); toast('복사했어요'); } };
+  (async () => {
+    const info = await fetch('/api/report/info').then((r) => r.json()).catch(() => ({ log: [] }));
+    const head = `[무슨 일이 있었나요?]\n(여기에 적어 주세요)\n\n` + (what ? `[오류]\n${what}\n\n` : '') + `[환경] 단동샘 편집기 v${info.version || '?'} / ${info.os || '?'} / 메모리 ${info.mem || '?'}\n\n[최근 기록]\n`;
+    const lines = [...(info.log || []), ...CLIENT_LOG];
+    let body = head + (lines.length ? lines.join('\n') : '(없음)');
+    try { body = (await fetch('/api/report/mask', { method: 'POST', body: JSON.stringify({ text: body }) }).then((r) => r.json())).text || body; } catch (e) {}
+    ta.value = body; ta.focus(); ta.setSelectionRange(ta.value.indexOf('(여기에'), ta.value.indexOf('(여기에') + 13);
+    if (!info.form) { go.remove(); note.textContent = '아직 오류를 받는 곳이 준비되지 않았어요. 복사해서 단동샘에게 보내 주세요.'; return; }
+    go.disabled = false;
+    go.onclick = async () => {
+      let t = ta.value; try { t = (await fetch('/api/report/mask', { method: 'POST', body: JSON.stringify({ text: t }) }).then((r) => r.json())).text || t; } catch (e) {}
+      if (t.length > 1800) { const i = t.indexOf('[최근 기록]'); t = i > 0 ? t.slice(0, i) + '[최근 기록]\n…' + t.slice(i).slice(-(1800 - i - 20)) : t.slice(0, 1800); }   // 주소가 너무 길면 안 열려서 오래된 기록부터 줄여요
+      window.open(info.form.replace('XXX', encodeURIComponent(t)), '_blank', 'noopener'); closeModal(); toast('설문지가 열리면 맨 아래 [제출]을 눌러 주세요', null, 6000);
+    };
+  })();
+}
+$('#btn-report').onclick = () => reportDialog('');
 $('#btn-help').onclick = async () => {
   const r = await fetch('/api/help').then((x) => x.json()).catch(() => ({ url: '' }));
   if (r.url) { window.open(r.url, '_blank'); return; }
@@ -2129,7 +2161,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     try { saveLocalNow(); } catch (e) {}
     const bg = E('div', 'askbg'), bx = E('div', 'askbox'); const t = E('div', 'ask-t', '내려받는 중… 0%'), bar = E('div', 'upbar', '<i></i>'), row = E('div', 'ask-b');
     bx.append(t, bar, row); bg.append(bx); document.body.append(bg);
-    const fail = (msg) => { t.textContent = msg; bar.remove(); row.innerHTML = ''; const lk = E('button', 'primary', '⬇ 직접 받으러 가기'); lk.onclick = async () => { if (await smartGuide('설치 파일을 직접 받으러 갈까요?', '받으러 가기')) window.open(RELEASE_PAGE, '_blank', 'noopener'); }; const cl = E('button', '', '닫기'); cl.onclick = () => bg.remove(); row.append(cl, lk); };
+    const fail = (msg) => { t.textContent = msg; bar.remove(); row.innerHTML = ''; const lk = E('button', 'primary', '⬇ 직접 받으러 가기'); lk.onclick = async () => { if (await smartGuide('설치 파일을 직접 받으러 갈까요?', '받으러 가기')) window.open(RELEASE_PAGE, '_blank', 'noopener'); }; const cl = E('button', '', '닫기'); cl.onclick = () => bg.remove(); const rp = E('button', '', '🚩 오류 보내기'); rp.onclick = () => { bg.remove(); reportDialog('업데이트 실패: ' + msg); }; row.append(rp, cl, lk); };
     const st = await fetch('/api/update/start', { method: 'POST' }).then((r) => r.json()).catch(() => ({ ok: false }));
     if (!st.ok) return fail(st.error || '업데이트를 시작하지 못했어요');
     const poll = async () => {

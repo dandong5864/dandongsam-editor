@@ -605,13 +605,13 @@ function startExport(b) {
     }
   });
   p.stderr.on('data', (d) => { job.log = (job.log + d).slice(-4000); });
-  p.on('error', (e) => { job.status = 'error'; job.error = 'ffmpeg를 실행할 수 없습니다: ' + e.message; });
+  p.on('error', (e) => { job.status = 'error'; job.error = 'ffmpeg를 실행할 수 없습니다: ' + e.message; console.error('내보내기', job.error); });
   p.on('close', (code) => {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
     (g.tmpFiles || []).forEach((f) => { try { fs.unlinkSync(f); } catch (e) {} });
     if (job.status === 'canceled') { try { fs.unlinkSync(out); } catch (e) {} return; }
     if (code === 0) { job.status = 'done'; job.progress = 1; }
-    else if (job.status !== 'error') { job.status = 'error'; job.error = job.log.split('\n').filter(Boolean).slice(-4).join('\n') || ('종료 코드 ' + code); }
+    else if (job.status !== 'error') { job.status = 'error'; job.error = job.log.split('\n').filter(Boolean).slice(-4).join('\n') || ('종료 코드 ' + code); console.error('내보내기 실패', job.error); }
   });
   return job;
 }
@@ -868,6 +868,32 @@ function httpGet(url, redirects = 3) {
   });
 }
 // ---- 업데이트 도우미 ----
+// ---- 오류 보내기: 최근 기록을 모아 두었다가, 사용자가 동의하면 구글 설문지로 보내요 ----
+const LOG_RING = [];
+const ringPush = (lvl, args) => { try { const t = new Date().toTimeString().slice(0, 8); LOG_RING.push(t + ' ' + lvl + ' ' + args.map((a) => a instanceof Error ? (a.stack || a.message) : typeof a === 'string' ? a : JSON.stringify(a)).join(' ').slice(0, 600)); if (LOG_RING.length > 40) LOG_RING.shift(); } catch (e) {} };
+for (const lvl of ['error', 'warn']) { const orig = console[lvl].bind(console); console[lvl] = (...a) => { ringPush(lvl.toUpperCase(), a); orig(...a); }; }
+const CRASH_LOG = path.join(WS, 'last-crash.log');
+try { const t = fs.readFileSync(CRASH_LOG, 'utf8'); t.split('\n').filter(Boolean).slice(-15).forEach((l) => LOG_RING.push('(지난번 실행) ' + l.slice(0, 600))); fs.unlinkSync(CRASH_LOG); } catch (e) {}
+process.on('uncaughtException', (e) => {   // 갑자기 꺼질 때 남긴 기록은 다음에 켤 때 오류 보내기에 같이 담겨요
+  try { fs.writeFileSync(CRASH_LOG, LOG_RING.concat(new Date().toTimeString().slice(0, 8) + ' CRASH ' + String(e && e.stack || e).slice(0, 1500)).join('\n')); } catch (e2) {}
+  try { process.stderr.write(String(e && e.stack || e) + '\n'); } catch (e2) {}
+  process.exit(1);
+});
+process.on('unhandledRejection', (e) => ringPush('REJECT', [e]));
+// 개인 정보 가리기: 사용자 이름·집 폴더 경로
+function maskPrivate(t) {
+  let s = String(t || '');
+  try { const h = os.homedir(); if (h) s = s.split(h).join('~').split(h.replace(/\\/g, '/')).join('~'); } catch (e) {}
+  try { const u = os.userInfo().username; if (u && u.length > 1) s = s.split(u).join('<사용자>'); } catch (e) {}
+  return s.replace(/([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s"']+/gi, '$1<사용자>').replace(/\/(home|Users)\/[^/\s"']+/g, '/$1/<사용자>').replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<이메일>');
+}
+const REPORT_URL = 'https://raw.githubusercontent.com/dandong5864/dandongsam-editor/main/public/report.json';
+async function reportForm() {
+  let cfg = null;
+  try { cfg = JSON.parse(await httpGet(REPORT_URL)); } catch (e) {}
+  if (!cfg) { try { cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'report.json'), 'utf8')); } catch (e) { cfg = {}; } }
+  return { form: /^https:\/\/docs\.google\.com\/forms\//.test(cfg.form || '') && /XXX/.test(cfg.form) ? cfg.form : '' };
+}
 const APP_VER = process.env.DDS_VER || (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch (e) { return '0.0.0'; } })();
 const UPD_REPO = 'dandong5864/dandongsam-editor';
 const upd = { state: 'idle', pct: 0, err: '', file: '' };
@@ -909,7 +935,7 @@ async function updStart(i) {
     const hd = Buffer.alloc(2); const fd = fs.openSync(dest, 'r'); fs.readSync(fd, hd, 0, 2, 0); fs.closeSync(fd);
     if (hd.toString('latin1') !== 'MZ' || (i.size && n !== i.size)) throw new Error('내려받은 파일이 올바르지 않아요');
     upd.file = dest; upd.state = 'ready'; upd.pct = 100;
-  } catch (e) { upd.state = 'error'; upd.err = '내려받지 못했어요 (' + (e.message || e) + ')'; }
+  } catch (e) { upd.state = 'error'; upd.err = '내려받지 못했어요 (' + (e.message || e) + ')'; console.error('업데이트', upd.err); }
 }
 async function cachedFeed(key, fn) {
   const c = feedCache[key]; if (c && Date.now() - c.t < 10 * 60 * 1000) return c.v;
@@ -1057,7 +1083,7 @@ async function sttRun(clips, lang) {
       done += len; J.pct = Math.min(99, Math.floor(done / totalDur * 100));
     }
     J.state = sttStop ? 'stopped' : 'done'; J.pct = 100; J.msg = sttStop ? '중단했어요' : '끝!';
-  } catch (e) { J.state = 'error'; J.err = String(e.message || e); J.msg = '문제가 생겼어요'; }
+  } catch (e) { J.state = 'error'; J.err = String(e.message || e); J.msg = '문제가 생겼어요'; console.error('자동 자막', J.err); }
 }
 function revealPath(p) {
   const abs = path.resolve(p);
@@ -1232,6 +1258,12 @@ const server = http.createServer(async (req, res) => {
     }
     // ---- 새 버전 알림 · 자동 업데이트 (GitHub 릴리스) ----
     if (req.method === 'GET' && p === '/api/version') return json(res, 200, { version: APP_VER });
+    if (req.method === 'GET' && p === '/api/report/info') {
+      let form = ''; try { form = (await cachedFeed('report', reportForm)).form; } catch (e) {}
+      const osName = process.platform === 'win32' ? 'Windows ' + os.release() : process.platform + ' ' + os.release();
+      return json(res, 200, { form, version: APP_VER, os: osName + ' (' + os.arch() + ')', mem: Math.round(os.totalmem() / 1073741824) + 'GB', log: LOG_RING.map(maskPrivate) });
+    }
+    if (req.method === 'POST' && p === '/api/report/mask') { const b = await readBody(req); return json(res, 200, { text: maskPrivate(b && b.text) }); }
     if (req.method === 'GET' && p === '/api/update/check') { try { return json(res, 200, await updCheck()); } catch (e) { return json(res, 200, { newer: false, error: '확인 못 함' }); } }
     if (req.method === 'POST' && p === '/api/update/start') { try { const i = await updCheck(); if (!i.newer) return json(res, 200, { ok: false, error: '이미 최신 버전이에요' }); updStart(i); return json(res, 200, { ok: true }); } catch (e) { return json(res, 200, { ok: false, error: e.message }); } }
     if (req.method === 'GET' && p === '/api/update/status') return json(res, 200, { state: upd.state, pct: upd.pct, err: upd.err });
