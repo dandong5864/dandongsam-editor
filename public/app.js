@@ -345,7 +345,7 @@ async function cardSfx() {   // 편집기에 들어 있는 '뿅' 효과음을 �
   try {
     const r = await fetch('/api/sfx').then((x) => x.json()), f = (r.files || []).find((x) => /^뽁\.|뿅/.test(x.name || ''));
     if (!f) return null;
-    const m = await fetch('/api/sfx/add', { method: 'POST', body: JSON.stringify({ rel: f.rel }) }).then((z) => z.json());
+    const m = await fetch('/api/sfx/add', { method: 'POST', body: JSON.stringify({ rel: f.rel, hide: true }) }).then((z) => z.json());
     if (m.error) return null; cardSfxId = m.id; return m;
   } catch (e) { return null; }
 }
@@ -1376,7 +1376,7 @@ addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) {
 
 /* ============ 미디어 패널 / 업로드 ============ */
 function fillMedia() {
-  const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = Object.values(S.media).filter((m) => S.pm.has(m.id) && !m.color);
+  const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = Object.values(S.media).filter((m) => S.pm.has(m.id) && !m.color && !m.hide);
   if (!ms.length) { l.append(E('div', 'empty-media', '아직 가져온 파일이 없어요.<br>＋ 가져오기를 누르거나<br>파일을 끌어다 놓으세요.')); return; }
   ms.forEach((m) => {   // 캡컷처럼 썸네일 타일: 위에 그림 + 길이, 아래에 이름
     const it = E('div', 'mitem');

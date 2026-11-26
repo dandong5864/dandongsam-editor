@@ -257,7 +257,7 @@ function listFonts() {
 }
 const pubFonts = () => listFonts().map(({ path: _p, ...r }) => r);
 
-const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), color: m.color || null });
+const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), color: m.color || null, hide: !!m.hide });
 
 // ---- 파일 스트리밍(Range 지원) ----
 function serveFile(req, res, file, type) {
@@ -1300,7 +1300,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/sfx/add' && req.method === 'POST') {
       const b = await readBody(req); const f = sfxPath(b.rel); if (!f) return json(res, 404, { error: '파일을 찾을 수 없어요' });
       const ext = path.extname(f).toLowerCase(), id = crypto.randomBytes(6).toString('hex'), dest = path.join(DIRS.media, id + ext);
-      try { fs.copyFileSync(f, dest); const m = await ingest(id, path.basename(f), dest, ext); media[id] = m; saveDB(); return json(res, 200, pub(m)); }
+      try { fs.copyFileSync(f, dest); const m = await ingest(id, path.basename(f), dest, ext); if (b.hide) m.hide = true; media[id] = m; saveDB(); return json(res, 200, pub(m)); }
       catch (e) { try { fs.unlinkSync(dest); } catch (e2) {} return json(res, 500, { error: e.message }); }
     }
     if (req.method === 'GET') {
