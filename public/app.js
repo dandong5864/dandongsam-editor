@@ -1467,6 +1467,8 @@ function buildLeft() {
       handclick: SV('0 0 100 130', `<path d="${HAND_D}" transform="translate(0 10)" stroke-width="7"/><path d="M43 8V0M33 12L27 6M53 12l6-6M29 22h-8M57 22h8" stroke-width="7"/>`, 1),
     };
     Object.keys(SHAPE_PTS).forEach((v) => { if (!SHI[v]) SHI[v] = SV('0 0 24 24', '<polygon points="' + SHAPE_PTS[v].map(([u, w]) => (u * 20 + 2).toFixed(1) + ',' + (w * 20 + 2).toFixed(1)).join(' ') + '"/>'); });
+    SHI.qmark = SV('0 0 24 24', '<text x="12" y="21" font-size="26" font-weight="900" text-anchor="middle" stroke="none">?</text>'); SHI.emark = SV('0 0 24 24', '<text x="12" y="21" font-size="26" font-weight="900" text-anchor="middle" stroke="none">!</text>');
+    SHI.qbadge = SV('0 0 24 24', '<circle cx="12" cy="12" r="10"/><text x="12" y="17.5" font-size="15" font-weight="900" text-anchor="middle" fill="#17171b" stroke="none">?</text>'); SHI.ebadge = SV('0 0 24 24', '<circle cx="12" cy="12" r="10"/><text x="12" y="17.5" font-size="15" font-weight="900" text-anchor="middle" fill="#17171b" stroke="none">!</text>');
     Object.keys(SHAPE_D).forEach((v) => { SHI[v] = SV('0 0 24 24', '<path transform="translate(2 2) scale(.2)" d="' + SHAPE_D[v] + '"/>'); });
     Object.keys(SHI).forEach((v) => { const b = E('button', 'chip', SHI[v]); b.title = SHAPE_NAMES[v]; b.onclick = () => addShape(v); sg.append(b); });
     sShape.w.append(sg);
@@ -2318,7 +2320,8 @@ function buildFxTab(d) {
 
 /* ============ 도형 (사각형 · 원) ============ */
 const hexA = (h, a) => { h = String(h || '#000000').replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); const n = parseInt(h, 16) || 0; return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${clamp(a, 0, 1)})`; };
-const SHAPE_NAMES = { rect: '사각형', ellipse: '원', arrow: '화살표', check: '체크 표시', cross: 'X 표시', checkbox: '체크박스', pointer: '마우스 포인터', click: '클릭 표시', badge: '번호 동그라미', hand: '손가락 포인터', handclick: '손가락 클릭', heart: '하트', star: '별', triangle: '삼각형', diamond: '마름모', pentagon: '오각형', hexagon: '육각형', plus: '더하기', bolt: '번개', chevron: '꺾쇠', darrow: '양쪽 화살표', bubble: '말풍선', bubble2: '둥근 말풍선' };
+const SHAPE_NAMES = { rect: '사각형', ellipse: '원', arrow: '화살표', check: '체크 표시', cross: 'X 표시', checkbox: '체크박스', pointer: '마우스 포인터', click: '클릭 표시', badge: '번호 동그라미', hand: '손가락 포인터', handclick: '손가락 클릭', heart: '하트', star: '별', triangle: '삼각형', diamond: '마름모', pentagon: '오각형', hexagon: '육각형', plus: '더하기', bolt: '번개', chevron: '꺾쇠', darrow: '양쪽 화살표', bubble: '말풍선', bubble2: '둥근 말풍선', qmark: '물음표', emark: '느낌표', qbadge: '물음표 동그라미', ebadge: '느낌표 동그라미', cloud: '구름', sparkle: '반짝임', burst: '강조 폭발', turn: '되돌아가는 화살표', para: '평행사변형', banner: '리본', bulb: '전구', magnifier: '돋보기', ring: '링', prohibit: '금지' };
+const GLYPH = { qmark: '?', emark: '!' }, BADGE_CH = { qbadge: '?', ebadge: '!' };
 const SHAPE_PTS = {
   arrow: [[0, .3], [.58, .3], [.58, 0], [1, .5], [.58, 1], [.58, .7], [0, .7]],
   check: [[.04, .56], [.2, .4], [.4, .6], [.8, .08], [.96, .24], [.4, .92]],
@@ -2331,15 +2334,24 @@ const SHAPE_PTS = {
   plus: [[.35, 0], [.65, 0], [.65, .35], [1, .35], [1, .65], [.65, .65], [.65, 1], [.35, 1], [.35, .65], [0, .65], [0, .35], [.35, .35]],
   bolt: [[.6, 0], [.12, .58], [.46, .58], [.34, 1], [.88, .4], [.52, .4]],
   chevron: [[0, 0], [.45, 0], [1, .5], [.45, 1], [0, 1], [.55, .5]],
+  sparkle: [[.5,0],[.62,.38],[1,.5],[.62,.62],[.5,1],[.38,.62],[0,.5],[.38,.38]],
+  burst: [[0.5,0.0],[0.596,0.143],[0.75,0.067],[0.762,0.238],[0.933,0.25],[0.857,0.404],[1.0,0.5],[0.857,0.596],[0.933,0.75],[0.762,0.762],[0.75,0.933],[0.596,0.857],[0.5,1.0],[0.404,0.857],[0.25,0.933],[0.238,0.762],[0.067,0.75],[0.143,0.596],[0.0,0.5],[0.143,0.404],[0.067,0.25],[0.238,0.238],[0.25,0.067],[0.404,0.143]],
+  para: [[.22,0],[1,0],[.78,1],[0,1]], banner: [[0,.1],[1,.1],[.9,.5],[1,.9],[0,.9],[.1,.5]],
   darrow: [[0, .5], [.2, .12], [.2, .34], [.8, .34], [.8, .12], [1, .5], [.8, .88], [.8, .66], [.2, .66], [.2, .88]]
 };
 // 곡선이 있는 도형 (가로·세로 100 칸 안에 그린 선)
 const SHAPE_D = {
   heart: 'M50 97C8 63 0 41 0 27C0 11 12 2 26 2C36 2 45 8 50 18C55 8 64 2 74 2C88 2 100 11 100 27C100 41 92 63 50 97Z',
   bubble: 'M16 4H84Q98 4 98 18V58Q98 72 84 72H48L26 96L30 72H16Q2 72 2 58V18Q2 4 16 4Z',
+  cloud: 'M26 84C11 84 2 72 2 59C2 46 12 38 25 38C28 20 42 8 60 8C77 8 90 20 92 36C97 40 99 48 99 58C99 72 88 84 74 84Z',
+  turn: 'M8 96C8 44 36 22 68 22V4L98 32L68 60V42C46 42 28 58 28 96Z',
+  bulb: 'M50 2C28 2 12 18 12 38C12 52 20 60 28 70C32 75 33 80 33 86H67C67 80 68 75 72 70C80 60 88 52 88 38C88 18 72 2 50 2ZM36 91H64V98H36Z',
+  magnifier: 'M42 3A39 39 0 1 1 42 81A39 39 0 1 1 42 3ZM42 19A23 23 0 1 0 42 65A23 23 0 1 0 42 19ZM67 62L79 50L98 71L86 83Z',
+  ring: 'M50 2A48 48 0 1 1 50 98A48 48 0 1 1 50 2ZM50 18A32 32 0 1 0 50 82A32 32 0 1 0 50 18Z',
+  prohibit: 'M50 2A48 48 0 1 1 50 98A48 48 0 1 1 50 2ZM50 16A34 34 0 1 0 50 84A34 34 0 1 0 50 16ZM22 33L33 22L78 67L67 78Z',
   bubble2: 'M50 4C24 4 3 21 3 41C3 53 10 63 21 70L15 97L46 77C47 77 49 77 50 77C76 77 97 61 97 41C97 21 76 4 50 4Z'
 };
-const SHAPE_START = { heart: { w: 18, h: 17, fillColor: '#FF3B30' }, star: { w: 18, h: 17, fillColor: '#FFD60A' }, triangle: { w: 18, h: 16 }, diamond: { w: 16, h: 18 }, pentagon: { w: 18, h: 17 }, hexagon: { w: 18, h: 16 }, plus: { w: 15, h: 15, fillColor: '#22C55E' }, bolt: { w: 12, h: 18 }, chevron: { w: 12, h: 16 }, darrow: { w: 28, h: 12, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, bubble: { w: 28, h: 22, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, bubble2: { w: 28, h: 22, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, hand: { w: 10, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, handclick: { w: 13, h: 15, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, badge: { w: 9, h: 9, fillColor: '#FF3B30', num: '1', numColor: '#ffffff' }, arrow: { w: 26, h: 13, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, click: { w: 9, h: 9, fillColor: '#FFE14D', fillOpacity: 45, stroke: true, strokeColor: '#FFD21F', strokeW: 6 }, check: { w: 12, h: 12, fillColor: '#22C55E' }, cross: { w: 12, h: 12, fillColor: '#FF3B30' }, checkbox: { w: 12, h: 12, fill: false, stroke: true, strokeColor: '#ffffff', strokeW: 8, radius: 15, checkColor: '#22C55E' }, pointer: { w: 9, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 4, shadow: true } };
+const SHAPE_START = { qmark: { w: 13, h: 18, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 6 }, emark: { w: 9, h: 18, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 6 }, qbadge: { w: 10, h: 10, fillColor: '#2F80ED' }, ebadge: { w: 10, h: 10, fillColor: '#FF3B30' }, cloud: { w: 26, h: 18, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, sparkle: { w: 14, h: 14, fillColor: '#FFD60A' }, burst: { w: 22, h: 22, fillColor: '#FFD60A', stroke: true, strokeColor: '#FF3B30', strokeW: 5 }, turn: { w: 18, h: 16, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, para: { w: 28, h: 12 }, banner: { w: 34, h: 12, fillColor: '#FF3B30' }, bulb: { w: 12, h: 18, fillColor: '#FFD60A' }, magnifier: { w: 15, h: 15, fillColor: '#2F80ED' }, ring: { w: 16, h: 16, fillColor: '#FF3B30' }, prohibit: { w: 16, h: 16, fillColor: '#FF3B30' }, heart: { w: 18, h: 17, fillColor: '#FF3B30' }, star: { w: 18, h: 17, fillColor: '#FFD60A' }, triangle: { w: 18, h: 16 }, diamond: { w: 16, h: 18 }, pentagon: { w: 18, h: 17 }, hexagon: { w: 18, h: 16 }, plus: { w: 15, h: 15, fillColor: '#22C55E' }, bolt: { w: 12, h: 18 }, chevron: { w: 12, h: 16 }, darrow: { w: 28, h: 12, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, bubble: { w: 28, h: 22, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, bubble2: { w: 28, h: 22, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, hand: { w: 10, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, handclick: { w: 13, h: 15, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, badge: { w: 9, h: 9, fillColor: '#FF3B30', num: '1', numColor: '#ffffff' }, arrow: { w: 26, h: 13, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, click: { w: 9, h: 9, fillColor: '#FFE14D', fillOpacity: 45, stroke: true, strokeColor: '#FFD21F', strokeW: 6 }, check: { w: 12, h: 12, fillColor: '#22C55E' }, cross: { w: 12, h: 12, fillColor: '#FF3B30' }, checkbox: { w: 12, h: 12, fill: false, stroke: true, strokeColor: '#ffffff', strokeW: 8, radius: 15, checkColor: '#22C55E' }, pointer: { w: 9, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 4, shadow: true } };
 const SHAPE_DEF = { fill: true, fillColor: '#FFFD00', fillOpacity: 100, stroke: false, strokeColor: '#ffffff', strokeW: 6, strokeStyle: 'solid', strokeOpacity: 100, radius: 0, shadow: false, shadowColor: '#000000', shadowOpacity: 60, shadowBlur: 12, shadowX: 6, shadowY: 8, opacity: 100, lock: true };
 // 도형을 캔버스에 그림 (미리보기와 내보내기가 똑같이 이 함수를 써요). Wc = 화면 가로 픽셀
 const HAND_D = 'M36 12 a7 7 0 0 1 14 0 L50 46 a6 6 0 0 1 12 0 L62 52 a6 6 0 0 1 12 0 L74 58 a6 6 0 0 1 12 0 L86 82 Q86 108 62 112 L44 112 Q32 112 26 100 L10 74 Q6 66 14 62 Q20 60 25 66 L36 80 Z';
@@ -2358,22 +2370,24 @@ function drawShape(x, Wc) {
     P2 = new Path2D(); P2.addPath(new Path2D(HAND_D), mt);
     if (click) { SPARK = new Path2D(); [-90, -135, -45, 180, 0].forEach((ag) => { const r = ag * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); const sp = new Path2D(); sp.moveTo(43 + 14 * c, 22 + 14 * s); sp.lineTo(43 + 22 * c, 22 + 22 * s); SPARK.addPath(sp, new DOMMatrix().translate(-w / 2, -h / 2).scale(w / 100, h / VH)); }); }
   } else if (SHAPE_D[x.shape]) { P2 = new Path2D(); P2.addPath(new Path2D(SHAPE_D[x.shape]), new DOMMatrix().translate(-w / 2, -h / 2).scale(w / 100, h / 100)); } else
-  if (x.shape === 'ellipse' || x.shape === 'click' || x.shape === 'badge') g.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+  if (x.shape === 'ellipse' || x.shape === 'click' || x.shape === 'badge' || BADGE_CH[x.shape]) g.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
   else if (SHAPE_PTS[x.shape]) { SHAPE_PTS[x.shape].forEach(([u, v], i) => { const px = (u - 0.5) * w, py = (v - 0.5) * h; if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath(); }
   else { const r = Math.min(clamp((x.radius || 0) / 100, 0, 0.5) * Math.min(w, h), w / 2, h / 2), l = -w / 2, t = -h / 2; g.moveTo(l + r, t); g.arcTo(l + w, t, l + w, t + h, r); g.arcTo(l + w, t + h, l, t + h, r); g.arcTo(l, t + h, l, t, r); g.arcTo(l, t, l + w, t, r); g.closePath(); }
   const setShadow = () => { if (x.shadow) { g.shadowColor = hexA(x.shadowColor, (x.shadowOpacity == null ? 60 : x.shadowOpacity) / 100); g.shadowBlur = sb; g.shadowOffsetX = sx; g.shadowOffsetY = sy; } };
   const noShadow = () => { g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = 0; g.shadowOffsetY = 0; };
+  const GL = GLYPH[x.shape];
+  const glyph = (st) => { g.save(); const fs = h * 0.92; g.font = `800 ${fs}px "Cafe24 Ssurround", "Malgun Gothic", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; const m = g.measureText(GL).width || 1; g.scale(w / m, 1); if (st) g.strokeText(GL, 0, fs * 0.04); else g.fillText(GL, 0, fs * 0.04); g.restore(); };
   let shadowed = false;
-  if (x.fill) { setShadow(); shadowed = true; g.fillStyle = hexA(x.fillColor, (x.fillOpacity == null ? 100 : x.fillOpacity) / 100); if (P2) g.fill(P2); else g.fill(); noShadow(); }
+  if (x.fill) { setShadow(); shadowed = true; g.fillStyle = hexA(x.fillColor, (x.fillOpacity == null ? 100 : x.fillOpacity) / 100); if (GL) glyph(0); else if (P2) g.fill(P2); else g.fill(); noShadow(); }
   if (x.stroke && sw > 0) {
     if (!shadowed) setShadow();
     g.lineWidth = sw; g.lineJoin = 'round'; g.lineCap = 'butt';
     if (x.strokeStyle === 'dashed') g.setLineDash([sw * 3, sw * 2]); else if (x.strokeStyle === 'dotted') { g.setLineDash([0.01, sw * 2]); g.lineCap = 'round'; } else g.setLineDash([]);
-    g.strokeStyle = hexA(x.strokeColor, (x.strokeOpacity == null ? 100 : x.strokeOpacity) / 100); if (P2) g.stroke(P2); else g.stroke();
+    g.strokeStyle = hexA(x.strokeColor, (x.strokeOpacity == null ? 100 : x.strokeOpacity) / 100); if (GL) glyph(1); else if (P2) g.stroke(P2); else g.stroke();
     if (SPARK) { g.setLineDash([]); g.lineCap = 'round'; g.stroke(SPARK); }
   }
-  if (x.shape === 'badge' && String(x.num || '').length) {   // 동그라미 안의 번호
-    noShadow(); const s = String(x.num).slice(0, 3), m = Math.min(w, h), fs = m * (s.length >= 3 ? 0.4 : s.length === 2 ? 0.52 : 0.64);
+  if ((x.shape === 'badge' && String(x.num || '').length) || BADGE_CH[x.shape]) {   // 동그라미 안의 번호·물음표·느낌표
+    noShadow(); const s = (BADGE_CH[x.shape] || String(x.num)).slice(0, 3), m = Math.min(w, h), fs = m * (s.length >= 3 ? 0.4 : s.length === 2 ? 0.52 : 0.64);
     g.font = `800 ${fs}px "Cafe24 Ssurround", "Malgun Gothic", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = x.numColor || '#ffffff'; g.fillText(s, 0, fs * 0.06);
   }
   if (x.shape === 'checkbox') {   // 상자 안의 체크 표시
