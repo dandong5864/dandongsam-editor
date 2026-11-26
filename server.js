@@ -1017,6 +1017,8 @@ async function homePins() {
     const pins = { youtube: [].concat(cfg.youtube || []), blog: [].concat(cfg.blog || []) };
     if (cfg.sheet) { try { const rows = parseCsv(await httpGet(sheetCsvUrl(cfg.sheet), 5)); const head = (rows.shift() || []).map((h) => String(h).trim());
       const ki = head.findIndex((h) => /칸|위치|종류/.test(h)), li = head.findIndex((h) => /링크|주소|url/i.test(h)), ti = head.findIndex((h) => /제목/.test(h));
+      const oi = head.findIndex((h) => /순서|번호|순위/.test(h)), num = (r) => { const n = parseFloat(String(oi >= 0 ? r[oi] : '').replace(/[^\d.]/g, '')); return isFinite(n) ? n : Infinity; };
+      rows.map((r, i) => [r, i]).sort((a, b) => num(a[0]) - num(b[0]) || a[1] - b[1]).forEach((x, i) => { rows[i] = x[0]; });   // "순서" 칸 숫자가 작은 것부터, 번호 없으면 뒤로
       for (const r of rows) { const u = String(r[li >= 0 ? li : 1] || '').trim(); if (!/^https?:\/\//i.test(u)) continue; const k = String(r[ki >= 0 ? ki : 0] || ''); const it = { url: u, title: ti >= 0 ? String(r[ti] || '').trim() : '' };
         (/자료|블로그|blog/i.test(k) ? pins.blog : ytId(u) || /유튜브|youtube/i.test(k) ? pins.youtube : pins.blog).push(it); } } catch (e) {} }
     return pins;
