@@ -543,3 +543,4 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 #lbody{overflow-x:hidden}#lbody>*{max-width:100%;min-width:0}
 .lab .ln{font-size:13px;width:52px;color:#c9c9d4}
 .stk-rm{position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;display:none;place-items:center;background:rgba(20,20,24,.9);border:1px solid #4a4a58;color:#fff;font-size:12px;font-weight:800;cursor:pointer}.stk-tile:hover .stk-rm{display:grid}.stk-rm:hover{background:#c0392b;border-color:transparent}
+.stk-grid.wide{grid-template-columns:repeat(2,1fr)}.stk-grid.wide .stk-tile{aspect-ratio:2.3\/1}

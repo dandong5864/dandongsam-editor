@@ -490,7 +490,7 @@ function addText(kind) {
 
 function addSticker(st) {
   push(); layout();
-  const x = { id: nid(), kind: 'sticker', sid: st.id, name: st.name, start: Math.round(S.t * 100) / 100, end: Math.round((S.t + 3) * 100) / 100, text: '', scale: 30, rot: 0, x: 50, y: 40 };
+  const x = { id: nid(), kind: 'sticker', sid: st.id, name: st.name, start: Math.round(S.t * 100) / 100, end: Math.round((S.t + 3) * 100) / 100, text: '', scale: st.builtin ? 55 : 30, rot: 0, x: 50, y: 40 };
   S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(true);
 }
 function renderStickerProps(p, x) {
@@ -1376,9 +1376,11 @@ function buildLeft() {
     d.append(E('h4', '', '이미지 · GIF'));
     d.append(ub, fi);
     const g = E('div', 'stk-grid'); d.append(g);
+    const bh = E('h4', '', '단축키 스티커'), bg = E('div', 'stk-grid wide'); bh.style.display = bg.style.display = 'none'; d.append(bh, bg);
     fetch('/api/stickers').then((r) => r.json()).then((l) => {
-      if (!l.length) { g.replaceWith(E('div', 'hint', '아직 추가한 스티커가 없어요')); return; }
-      l.forEach((st) => { const t = E('button', 'stk-tile'); t.title = st.name; const im = E('img'); im.src = '/api/sticker/file?n=' + encodeURIComponent(st.id); im.draggable = false; t.append(im); if (st.gif) t.append(E('span', 'gb', 'GIF')); const rm = E('span', 'stk-rm', '✕'); rm.title = '이 이미지 지우기'; rm.onclick = async (e) => { e.stopPropagation(); e.preventDefault(); const used = S.texts.filter((x) => x.kind === 'sticker' && x.sid === st.id); if (!(await ask('이 이미지를 목록에서 지울까요?' + (used.length ? '\n타임라인에 넣은 ' + used.length + '개도 함께 지워져요.' : ''), { danger: true, ok: '삭제' }))) return; const r = await fetch('/api/sticker/delete?n=' + encodeURIComponent(st.id), { method: 'POST' }).then((z) => z.json()).catch(() => ({})); if (!r.ok) return toast(r.error || '지우지 못했어요'); if (used.length) { push(); S.texts = S.texts.filter((x) => !(x.kind === 'sticker' && x.sid === st.id)); S.sel = null; changed(); } toast('지웠어요'); buildLeft(); }; t.append(rm); t.onclick = () => addSticker(st); t.draggable = true; t.ondragstart = (e) => { dragKind = 'sticker'; e.dataTransfer.setData('text/x-vtk', JSON.stringify({ k: 'sticker', st })); e.dataTransfer.effectAllowed = 'copy'; }; g.append(t); });
+      if (!l.some((s) => !s.builtin)) g.replaceWith(E('div', 'hint', '아직 추가한 스티커가 없어요'));
+      if (l.some((s) => s.builtin)) bh.style.display = bg.style.display = '';
+      l.forEach((st) => { const t = E('button', 'stk-tile'); t.title = st.name; const im = E('img'); im.src = '/api/sticker/file?n=' + encodeURIComponent(st.id); im.draggable = false; t.append(im); if (st.gif) t.append(E('span', 'gb', 'GIF')); const rm = E('span', 'stk-rm', '✕'); rm.title = '이 이미지 지우기'; rm.onclick = async (e) => { e.stopPropagation(); e.preventDefault(); const used = S.texts.filter((x) => x.kind === 'sticker' && x.sid === st.id); if (!(await ask('이 이미지를 목록에서 지울까요?' + (used.length ? '\n타임라인에 넣은 ' + used.length + '개도 함께 지워져요.' : ''), { danger: true, ok: '삭제' }))) return; const r = await fetch('/api/sticker/delete?n=' + encodeURIComponent(st.id), { method: 'POST' }).then((z) => z.json()).catch(() => ({})); if (!r.ok) return toast(r.error || '지우지 못했어요'); if (used.length) { push(); S.texts = S.texts.filter((x) => !(x.kind === 'sticker' && x.sid === st.id)); S.sel = null; changed(); } toast('지웠어요'); buildLeft(); }; if (!st.builtin) t.append(rm); t.onclick = () => addSticker(st); t.draggable = true; t.ondragstart = (e) => { dragKind = 'sticker'; e.dataTransfer.setData('text/x-vtk', JSON.stringify({ k: 'sticker', st })); e.dataTransfer.effectAllowed = 'copy'; }; (st.builtin ? bg : g).append(t); });
     }).catch(() => {});
     const ss = S.texts.filter((x) => x.kind === 'sticker').sort((p, q) => p.start - q.start);
     if (ss.length) { d.append(E('h4', '', '넣은 스티커')); ss.forEach((x) => { const r = E('div', 'titem' + (isSel('t', x.id) ? ' sel' : '')); r.append(E('span', 'tm', fmt(x.start, 1)), E('span', 'tx', esc(x.name || ''))); r.onclick = () => { select('t', x.id); seek(x.start + 0.01); }; d.append(r); }); }
@@ -2070,7 +2072,7 @@ async function sttDialog() {
       if (m.hasVideo) { const c = { id: nid(), mediaId: m.id, in: 0, out: defDur(m), ...dflt(), fit: (S.clips[0] && S.clips[0].fit) || 'contain' }; S.clips.splice(idx, 0, c); layout(); S.sel = { type: 'v', id: c.id }; changed(true); seek(c.start + 0.01, true); }
       else { S.audio.push({ id: nid(), mediaId: m.id, start: Math.round(t * 100) / 100, in: 0, out: m.duration, vol: 100 }); changed(true); }
     } else if (p.k === 'sticker') {
-      push(); layout(); const x = { id: nid(), kind: 'sticker', sid: p.st.id, name: p.st.name, start: Math.round(t * 100) / 100, end: Math.round((t + 3) * 100) / 100, text: '', scale: 30, rot: 0, x: 50, y: 40 }; if (e.target.closest('#track-k')) x.lane = laneHit($('#track-k'), e.clientY).lane;
+      push(); layout(); const x = { id: nid(), kind: 'sticker', sid: p.st.id, name: p.st.name, start: Math.round(t * 100) / 100, end: Math.round((t + 3) * 100) / 100, text: '', scale: p.st.builtin ? 55 : 30, rot: 0, x: 50, y: 40 }; if (e.target.closest('#track-k')) x.lane = laneHit($('#track-k'), e.clientY).lane;
       S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(true);
     } else if (p.k === 'sfx') {
       try { const m = await fetch('/api/sfx/add', { method: 'POST', body: JSON.stringify({ rel: p.rel }) }).then((z) => z.json()); if (m.error) throw new Error(m.error);

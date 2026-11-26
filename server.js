@@ -183,6 +183,8 @@ const PROJ_DIR = path.join(WS, 'projects'); try { fs.mkdirSync(PROJ_DIR, { recur
 // ---- 스티커 (이미지 / GIF) ----
 const STICKER_DIR = path.join(ROOT, '스티커'); const STICKER_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 try { fs.mkdirSync(STICKER_DIR, { recursive: true }); } catch (e) {}
+const BUILTIN_STK = path.join(ROOT, '기본스티커');   // 편집기에 처음부터 들어 있는 스티커(지우거나 바꿀 수 없어요)
+const stkPath = (n) => { const b = path.basename(String(n || '')); const a = path.join(STICKER_DIR, b); return fs.existsSync(a) ? a : path.join(BUILTIN_STK, b); };
 
 // ---- 효과음 폴더 ----
 const SETTINGS = path.join(WS, 'settings.json');
@@ -498,9 +500,9 @@ function buildExport(b) {
     filt.push(`${vLabel}[pp${k}]overlay=x=${n(W * clamp(+t.x, 0, 100) / 100)}-w/2:y=${n(H * clamp(+t.y, 0, 100) / 100)}-h/2:enable='between(t,${n(st)},${n(en)})':eof_action=pass:format=auto[pv${k}]`);
     vLabel = `[pv${k}]`;
   };
-  const stks = aOnly ? [] : (b.texts || []).filter((t) => t.kind === 'sticker' && t.sid && fs.existsSync(path.join(STICKER_DIR, path.basename(String(t.sid)))));
+  const stks = aOnly ? [] : (b.texts || []).filter((t) => t.kind === 'sticker' && t.sid && fs.existsSync(stkPath(t.sid)));
   const doStk = (t, k) => {
-    const f = path.join(STICKER_DIR, path.basename(String(t.sid))), gif = /\.gif$/i.test(f);
+    const f = stkPath(t.sid), gif = /\.gif$/i.test(f);
     const idx = inputs.filter((x) => x === '-i').length;
     if (gif) inputs.push('-ignore_loop', '0', '-i', f); else inputs.push('-loop', '1', '-framerate', String(FPS), '-i', f);
     const w = even(W * clamp(+t.scale || 30, 2, 200) / 100), rot = clamp(+t.rot || 0, -360, 360);
@@ -1234,7 +1236,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/stickers' && req.method === 'GET') {
       let fl = []; try { fl = fs.readdirSync(STICKER_DIR).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}
-      return json(res, 200, fl.map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: /\.gif$/i.test(f) })));
+      let bl = []; try { bl = fs.readdirSync(BUILTIN_STK).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}
+      return json(res, 200, fl.map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: /\.gif$/i.test(f) })).concat(bl.filter((f) => !fl.includes(f)).map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: false, builtin: true }))));
     }
     if (p === '/api/sticker/upload' && req.method === 'POST') {
       const raw = path.basename(u.searchParams.get('name') || 'sticker.png'); const ext = path.extname(raw).toLowerCase();
@@ -1250,7 +1253,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     if (p === '/api/sticker/file' && req.method === 'GET') {
-      const f = path.join(STICKER_DIR, path.basename(u.searchParams.get('n') || '')); if (!fs.existsSync(f)) { res.writeHead(404); return res.end(); }
+      const f = stkPath(u.searchParams.get('n')); if (!fs.existsSync(f)) { res.writeHead(404); return res.end(); }
       return serveFile(req, res, f);
     }
     if (p === '/api/help' && req.method === 'GET') {
