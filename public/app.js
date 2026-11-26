@@ -1387,7 +1387,12 @@ function renderTextProps(p, x) {
   const b2 = E('button', 'danger', '🗑 삭제'); b2.onclick = del; br.append(b2); p.append(br);
 }
 let curProj = null;
-function saveLocalNow() { try { localStorage.setItem(KEY, JSON.stringify({ pm: [...S.pm], proj: curProj, clips: S.clips, audio: S.audio, texts: S.texts, bg: S.bg, tpl: S.tpl, canvas: S.canvas, zoom: S.zoom, trk: S.trk })); } catch (e) {} }
+function saveLocalNow() { srvDirty = true; try { localStorage.setItem(KEY, JSON.stringify({ pm: [...S.pm], proj: curProj, clips: S.clips, audio: S.audio, texts: S.texts, bg: S.bg, tpl: S.tpl, canvas: S.canvas, zoom: S.zoom, trk: S.trk })); } catch (e) {} }
+let srvDirty = false;   // 컴퓨터(편집기 폴더)에도 20초마다 자동 저장해요. 브라우저 저장이 지워져도 작업이 남아요
+const autoBody = () => JSON.stringify({ proj: curProj, pm: [...S.pm], data: projData() });
+const hasWork = () => S.clips.length || S.audio.length || S.texts.length;
+setInterval(() => { if (!srvDirty || !hasWork()) return; srvDirty = false; fetch('/api/autosave', { method: 'POST', body: autoBody() }).catch(() => { srvDirty = true; }); }, 20000);
+addEventListener('pagehide', () => { if (srvDirty && hasWork()) try { navigator.sendBeacon('/api/autosave', autoBody()); } catch (e) {} });
 let saveTimer = 0;   // 자동 저장은 잠깐 모았다가 한 번에 (끌 때마다 통째로 저장하면 버벅여요)
 function saveLocal() { if (saveTimer) return; saveTimer = setTimeout(() => { saveTimer = 0; saveLocalNow(); }, 400); }
 addEventListener('pagehide', () => { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; } saveLocalNow(); });
@@ -1811,7 +1816,11 @@ setInterval(async () => {
 (async () => {
   try { (await fetch('/api/media').then((r) => r.json())).forEach((m) => { S.media[m.id] = m; }); } catch (e) { toast('서버에 연결할 수 없어요'); }
   try {
-    const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+    let o = null; try { o = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+    if (!o || !((o.clips || []).length || (o.texts || []).length)) {   // 브라우저 저장이 비었거나 망가졌으면 컴퓨터에 남은 자동 저장에서 이어서
+      const a = await fetch('/api/autosave').then((r) => r.json()).catch(() => null);
+      if (a && a.data && ((a.data.clips || []).length || (a.data.texts || []).length)) { o = { ...a.data, pm: a.pm || [], proj: a.proj || null }; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
+    }
     if (o) {
       S.clips = (o.clips || []).filter((c) => S.media[c.mediaId]); S.audio = (o.audio || []).filter((a) => S.media[a.mediaId]);
       S.texts = o.texts || []; S.bg = nb(o.bg); S.tpl = o.tpl || null; S.canvas = o.canvas || 'original'; S.trk = o.trk || {}; S.zoom = o.zoom || 60; curProj = o.proj || null;
@@ -1862,6 +1871,24 @@ $('#btn-help').onclick = async () => {
 /* ============ 동영상 저장 / 열기 / 파일 ============ */
 const projData = () => JSON.parse(JSON.stringify({ clips: S.clips, audio: S.audio, texts: S.texts, bg: S.bg, tpl: S.tpl, canvas: S.canvas, zoom: S.zoom, trk: S.trk,
   media: Object.fromEntries([...S.clips, ...S.audio].map((c) => c.mediaId).filter((v, i, ar) => ar.indexOf(v) === i).map((id) => [id, { name: (S.media[id] || {}).name, size: (S.media[id] || {}).size }])) }));
+const hhmm = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function openedNote(j) { if (j && j.restoredFrom) toast(`파일이 망가져서 ${hhmm(j.restoredFrom)}에 백업한 상태로 열었어요`, null, 8000); }
+// 이전 상태로 되돌리기: 저장할 때마다 남겨 둔 백업 중에서 골라요
+async function restoreDialog(p, after) {
+  const l = await fetch('/api/backups?id=' + p.id).then((r) => r.json()).catch(() => []);
+  const d = E('div', 'dlg', `<h2>⏪ 이전 상태로 되돌리기</h2><div class="dim">${esc(p.name)}</div>`); const lst = E('div', 'projlist'); d.append(lst);
+  if (!l.length) lst.append(E('div', 'hint', '아직 남아 있는 이전 상태가 없어요'));
+  l.forEach((b) => {
+    const r = E('div', 'projrow'); r.append(E('div', 'pn', `<b>${hhmm(b.t)}</b><small>클립 ${b.clips}개</small>`));
+    const go = E('button', 'primary sm', '되돌리기'); go.onclick = async () => {
+      const j = await fetch(`/api/backup?id=${p.id}&t=${b.t}`).then((x) => x.json()).catch(() => ({ error: '열 수 없어요' })); if (j.error) return toast(j.error);
+      await fetch('/api/backup/snap', { method: 'POST', body: JSON.stringify({ id: p.id }) }).catch(() => {});   // 지금 상태도 남겨 둬서 다시 돌아올 수 있어요
+      closeModal(); if (after) after(); curProj = { id: p.id, name: p.name }; loadProjectData(j.data); await saveProject(p.name); toast(`${hhmm(b.t)} 상태로 되돌렸어요`);
+    };
+    r.append(go); lst.append(r);
+  });
+  const a = E('div', 'acts'); const c = E('button', '', '닫기'); c.onclick = closeModal; a.append(c); d.append(a); openModal(d);
+}
 async function saveProject(name) {
   const r = await fetch('/api/project/save', { method: 'POST', body: JSON.stringify({ id: curProj && curProj.id, name, data: projData() }) }).then((x) => x.json()).catch(() => ({}));
   if (!r.id) { toast('저장하지 못했어요'); return false; }
@@ -1951,9 +1978,10 @@ async function openProjects() {
     if (!l.length) lst.append(E('div', 'hint', '아직 저장한 동영상이 없어요'));
     l.forEach((p) => {
       const r = E('div', 'projrow' + (curProj && curProj.id === p.id ? ' cur' : '')); r.append(E('div', 'pn', `<b>${esc(p.name)}</b><small>${fmtDate(p.updated)} · 클립 ${p.clips}개</small>`));
-      const ob = E('button', 'primary sm', '열기'); ob.onclick = async () => { const j = await fetch('/api/project?id=' + p.id).then((x) => x.json()); if (j.error) return toast(j.error); closeModal(); curProj = { id: j.id, name: j.name }; loadProjectData(j.data); };
+      const ob = E('button', 'primary sm', '열기'); ob.onclick = async () => { const j = await fetch('/api/project?id=' + p.id).then((x) => x.json()); if (j.error) return toast(j.error); closeModal(); curProj = { id: j.id, name: j.name }; loadProjectData(j.data); openedNote(j); };
+      const rb = E('button', 'sm', '되돌리기'); rb.onclick = () => restoreDialog(p);
       const db = E('button', 'sm', '삭제'); db.onclick = async () => { if (!(await ask(`'${p.name}' 동영상을 삭제할까요?\n되돌릴 수 없어요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; refresh(); };
-      r.append(ob, db); lst.append(r);
+      r.append(ob, rb, db); lst.append(r);
     });
   };
   sb.onclick = async () => { const n = ni.value.trim(); if (!n) return toast('이름을 적어 주세요'); if (curProj && curProj.name !== n) curProj = null; if (await saveProject(n)) refresh(); };
@@ -2199,10 +2227,11 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     fetch('/api/projects').then((r) => r.json()).catch(() => []).then((l) => {
       if (!l.length) { pl.append(E('div', 'hm-empty', '아직 저장한 동영상이 없어요. 편집 중에 💾 저장을 눌러 보세요.')); return; }
       l.slice(0, 12).forEach((p) => { const c = E('button', 'hm-proj', `<div class="hm-pi">🎬</div><div class="hm-pn">${esc(p.name)}</div><small>${fmtDate(p.updated)} · 클립 ${p.clips}개</small>`);
-        c.onclick = async () => { const j = await fetch('/api/project?id=' + p.id).then((x) => x.json()).catch(() => ({ error: '열 수 없어요' })); if (j.error) return toast(j.error); hide(); curProj = { id: j.id, name: j.name }; loadProjectData(j.data); };
+        c.onclick = async () => { const j = await fetch('/api/project?id=' + p.id).then((x) => x.json()).catch(() => ({ error: '열 수 없어요' })); if (j.error) return toast(j.error); hide(); curProj = { id: j.id, name: j.name }; loadProjectData(j.data); openedNote(j); };
         const w = E('div', 'hm-pw'); const x = E('button', 'hm-pdel', '🗑 삭제'); x.title = '이 동영상 삭제';
         x.onclick = async (ev) => { ev.stopPropagation(); if (!(await ask(`'${p.name}' 동영상을 삭제할까요?\n되돌릴 수 없어요. 가져온 영상 파일은 지워지지 않아요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; w.remove(); if (!pl.children.length) pl.append(E('div', 'hm-empty', '아직 저장한 동영상이 없어요. 편집 중에 💾 저장을 눌러 보세요.')); };
-        w.append(c, x); pl.append(w); });
+        const rv = E('button', 'hm-pdel hm-prev', '⏪ 되돌리기'); rv.title = '이전 상태로 되돌리기'; rv.onclick = (ev) => { ev.stopPropagation(); restoreDialog(p, hide); };
+        w.append(c, x, rv); pl.append(w); });
     });
     const cols = E('div', 'hm-cols'); wrap.append(cols); const yc = E('div', 'hm-col'), bc = E('div', 'hm-col'), xc = E('div', 'hm-col'); cols.append(yc, bc, xc);
     // 유튜브

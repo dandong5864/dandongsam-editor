@@ -199,6 +199,29 @@ async function handleUpload(req, res, q) {
 }
 
 const PROJ_DIR = path.join(WS, 'projects'); try { fs.mkdirSync(PROJ_DIR, { recursive: true }); } catch (e) {}
+// ---- 작업 백업: 저장할 때마다 이전 상태를 backups/<동영상>/ 에 돌려 가며 보관해요 (편집 정보만, 영상 원본은 아님) ----
+const BAK_DIR = path.join(WS, 'backups'); try { fs.mkdirSync(BAK_DIR, { recursive: true }); } catch (e) {}
+const AUTO_FILE = path.join(WS, 'autosave.json');   // 저장하지 않은 지금 작업도 여기에 계속 남겨 둬요
+function writeSafe(f, text) { const tmp = f + '.tmp'; fs.writeFileSync(tmp, text); fs.renameSync(tmp, f); }   // 쓰다가 꺼져도 파일이 깨지지 않게
+const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } };
+const bakKey = (id) => (/^[a-z0-9]{6,16}$/.test(id || '') ? id : '_auto');
+function listBak(id) {
+  const d = path.join(BAK_DIR, bakKey(id)); let l = [];
+  try { l = fs.readdirSync(d).filter((f) => /^\d+\.json$/.test(f)).map((f) => +f.slice(0, -5)).sort((a, b) => b - a); } catch (e) {}
+  return l;
+}
+// 최근 10개 + 그보다 오래된 건 하루 1개씩 7일치만 남겨요
+function pruneBak(id) {
+  const d = path.join(BAK_DIR, bakKey(id)), l = listBak(id), keep = new Set(l.slice(0, 10)), days = new Set();
+  for (const t of l.slice(10)) { const day = new Date(t).toDateString(); if (Date.now() - t < 7 * 864e5 && !days.has(day)) { days.add(day); keep.add(t); } }
+  for (const t of l) if (!keep.has(t)) { try { fs.unlinkSync(path.join(d, t + '.json')); } catch (e) {} }
+}
+// 바뀌기 전 내용을 백업으로 남겨요 (너무 자주 쌓이지 않게 5분에 한 번까지)
+function backupBefore(id, file, force) {
+  const old = readJson(file); if (!old || !old.data) return;
+  const l = listBak(id); if (!force && l.length && Date.now() - l[0] < 5 * 60 * 1000) return;
+  const d = path.join(BAK_DIR, bakKey(id)); try { fs.mkdirSync(d, { recursive: true }); writeSafe(path.join(d, Date.now() + '.json'), JSON.stringify(old)); pruneBak(id); } catch (e) { console.error('백업', e.message); }
+}
 // ---- 스티커 (이미지 / GIF) ----
 const STICKER_DIR = path.join(ROOT, '스티커'); const STICKER_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 try { fs.mkdirSync(STICKER_DIR, { recursive: true }); } catch (e) {}
@@ -1361,19 +1384,44 @@ const server = http.createServer(async (req, res) => {
       await pipeline(req, fs.createWriteStream(path.join(SFX_OWN, raw))); return json(res, 200, { ok: true, rel: '@/' + raw });
     }
     if (p === '/api/projects' && req.method === 'GET') {
-      let l = []; try { l = fs.readdirSync(PROJ_DIR).filter((f) => f.endsWith('.json')).map((f) => { try { const j = JSON.parse(fs.readFileSync(path.join(PROJ_DIR, f), 'utf8')); return { id: j.id, name: j.name, updated: j.updated, clips: ((j.data || {}).clips || []).length }; } catch (e) { return null; } }).filter(Boolean); } catch (e) {}
+      let l = []; try { l = fs.readdirSync(PROJ_DIR).filter((f) => f.endsWith('.json')).map((f) => { try { const j = JSON.parse(fs.readFileSync(path.join(PROJ_DIR, f), 'utf8')); return { id: j.id, name: j.name, updated: j.updated, clips: ((j.data || {}).clips || []).length }; } catch (e) { const id = f.slice(0, -5), t = listBak(id)[0], b = t && readJson(path.join(BAK_DIR, bakKey(id), t + '.json')); return b && b.data ? { id, name: b.name, updated: b.updated || t, clips: (b.data.clips || []).length } : null; } }).filter(Boolean); } catch (e) {}
       return json(res, 200, l.sort((a, b) => b.updated - a.updated));
     }
     if (p === '/api/project/save' && req.method === 'POST') {
       const b = await readBody(req); const id = /^[a-z0-9]{6,16}$/.test(b.id || '') ? b.id : crypto.randomBytes(5).toString('hex');
       const rec = { id, name: String(b.name || '').trim().slice(0, 80) || '이름 없는 동영상', updated: Date.now(), data: b.data || {} };
-      fs.writeFileSync(path.join(PROJ_DIR, id + '.json'), JSON.stringify(rec)); return json(res, 200, { id, name: rec.name, updated: rec.updated });
+      const pf = path.join(PROJ_DIR, id + '.json'); backupBefore(id, pf); writeSafe(pf, JSON.stringify(rec)); return json(res, 200, { id, name: rec.name, updated: rec.updated });
+    }
+    // 자동 저장: 지금 작업(저장 안 한 것 포함)을 계속 남기고, 저장한 동영상이면 그 파일도 같이 갱신해요
+    if (p === '/api/autosave' && req.method === 'POST') {
+      const b = await readBody(req); if (!b || !b.data) return json(res, 400, { error: '내용이 없어요' });
+      backupBefore('_auto', AUTO_FILE); writeSafe(AUTO_FILE, JSON.stringify({ updated: Date.now(), proj: b.proj || null, pm: b.pm || [], data: b.data }));
+      const id = b.proj && b.proj.id; const pf = /^[a-z0-9]{6,16}$/.test(id || '') && path.join(PROJ_DIR, id + '.json');
+      if (pf && fs.existsSync(pf)) { const old = readJson(pf) || {}; backupBefore(id, pf); writeSafe(pf, JSON.stringify({ id, name: old.name || (b.proj.name || '이름 없는 동영상'), updated: Date.now(), data: b.data })); }
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/autosave' && req.method === 'GET') return json(res, 200, readJson(AUTO_FILE) || {});
+    if (p === '/api/backup/snap' && req.method === 'POST') {   // 되돌리기 직전 지금 상태를 꼭 남겨 둬요
+      const b = await readBody(req); const id = b && b.id; if (!/^[a-z0-9]{6,16}$/.test(id || '')) return json(res, 400, { error: '잘못된 동영상' });
+      backupBefore(id, path.join(PROJ_DIR, id + '.json'), true); return json(res, 200, { ok: true });
+    }
+    if (p === '/api/backups' && req.method === 'GET') {
+      const id = String(u.searchParams.get('id') || ''); const d = path.join(BAK_DIR, bakKey(id));
+      return json(res, 200, listBak(id).map((t) => { const j = readJson(path.join(d, t + '.json')); return j && j.data ? { t, clips: (j.data.clips || []).length } : null; }).filter(Boolean));
+    }
+    if (p === '/api/backup' && req.method === 'GET') {
+      const id = String(u.searchParams.get('id') || ''), t = String(u.searchParams.get('t') || ''); if (!/^\d+$/.test(t)) return json(res, 400, { error: '잘못된 백업' });
+      const j = readJson(path.join(BAK_DIR, bakKey(id), t + '.json')); if (!j) return json(res, 404, { error: '백업을 찾을 수 없어요' });
+      return json(res, 200, j);
     }
     if (p === '/api/project' && (req.method === 'GET' || req.method === 'DELETE')) {
       const id = String(u.searchParams.get('id') || ''); if (!/^[a-z0-9]{6,16}$/.test(id)) return json(res, 400, { error: '잘못된 동영상' });
       const f = path.join(PROJ_DIR, id + '.json'); if (!fs.existsSync(f)) return json(res, 404, { error: '동영상을 찾을 수 없어요' });
-      if (req.method === 'DELETE') { fs.unlinkSync(f); return json(res, 200, { ok: true }); }
-      return json(res, 200, JSON.parse(fs.readFileSync(f, 'utf8')));
+      if (req.method === 'DELETE') { fs.unlinkSync(f); try { fs.rmSync(path.join(BAK_DIR, id), { recursive: true, force: true }); } catch (e) {} return json(res, 200, { ok: true }); }
+      const j = readJson(f); if (j && j.data) return json(res, 200, j);
+      // 파일이 망가졌으면 가장 최근 정상 백업으로 열어요
+      for (const t of listBak(id)) { const b = readJson(path.join(BAK_DIR, id, t + '.json')); if (b && b.data) { console.error('망가진 동영상 파일을 백업으로 열었어요', id); return json(res, 200, { ...b, restoredFrom: t }); } }
+      return json(res, 500, { error: '동영상 파일이 망가져서 열 수 없어요' });
     }
     if (p === '/api/stickers' && req.method === 'GET') {
       let fl = []; try { fl = fs.readdirSync(STICKER_DIR).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}

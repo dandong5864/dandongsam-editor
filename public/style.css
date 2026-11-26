@@ -402,6 +402,7 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 
 .hm-pw{position:relative;display:flex}.hm-pw .hm-proj{flex:1;width:100%}
 .hm-pdel{position:absolute;top:10px;right:10px;padding:6px 11px;border-radius:10px;border:1px solid #3a3a46;background:#26262f;color:#ff8d8d;font-size:13px;font-weight:700;cursor:pointer}
+.hm-pw .hm-proj{padding-bottom:50px}.hm-pdel.hm-prev{top:auto;bottom:10px;color:#cfd3dc}.hm-pw .hm-pdel{min-width:96px;text-align:center;white-space:nowrap}.hm-pdel.hm-prev:hover{background:#30303a;border-color:#4a4a58;color:#fff}
 .hm-pdel:hover{background:#3a2020;border-color:#7a3a3a;color:#ffb0b0}
 
 /* 자동 편집 창 더 넓게 · 받은 결과 버튼 크게 */
