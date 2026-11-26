@@ -1063,8 +1063,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/import') {
       const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
       let txt = ''; await new Promise((ok) => { const ch = []; req.on('data', (c) => ch.push(c)); req.on('end', () => { txt = Buffer.concat(ch).toString('utf8').replace(/^\uFEFF/, ''); ok(); }); });
-      let j; try { j = JSON.parse(txt); } catch (e) { return json(res, 400, { error: '프로젝트 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 올려 주세요' }); }
-      if (!j || typeof j !== 'object') return json(res, 400, { error: '프로젝트 파일을 읽을 수 없어요' });
+      let j; try { j = JSON.parse(txt); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 올려 주세요' }); }
+      if (!j || typeof j !== 'object') return json(res, 400, { error: '편집 파일을 읽을 수 없어요' });
       const nm = (path.basename(String(u.searchParams.get('name') || '결과')).replace(/\.(dsp|json|txt)$/i, '').replace(/[\\/:*?"<>|]/g, '') || '결과') + '.dsp';
       fs.mkdirSync(path.join(dir, '결과'), { recursive: true }); const f = path.join(dir, '결과', nm); fs.writeFileSync(f, JSON.stringify(j), 'utf8'); return json(res, 200, { file: f });
     }
@@ -1072,8 +1072,8 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req); const dir = path.resolve(String(b.path || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
       const R = path.join(dir, '결과'); fs.mkdirSync(R, { recursive: true });
       const f = await pickFile(R); if (f === null) return json(res, 200, { unsupported: true }); if (!f) return json(res, 200, { canceled: true });
-      let j; try { j = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { return json(res, 400, { error: '프로젝트 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 골라 주세요' }); }
-      if (!j || typeof j !== 'object') return json(res, 400, { error: '프로젝트 파일을 읽을 수 없어요' });
+      let j; try { j = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 골라 주세요' }); }
+      if (!j || typeof j !== 'object') return json(res, 400, { error: '편집 파일을 읽을 수 없어요' });
       let dest = path.resolve(f);
       if (path.dirname(dest) !== path.resolve(R) || !/\.dsp$/i.test(dest)) { const nm = (path.basename(f).replace(/\.(dsp|json|txt)$/i, '').replace(/[\\/:*?"<>|]/g, '') || '결과') + '.dsp'; dest = path.join(R, nm); fs.writeFileSync(dest, JSON.stringify(j), 'utf8'); }
       return json(res, 200, { file: dest });
@@ -1103,8 +1103,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && p === '/api/auto/open') {
       const b = await readBody(req); const f = path.resolve(String(b.file || ''));
-      if (!autoAllowed(f) || !/\.dsp$/i.test(f) || !fs.existsSync(f)) return json(res, 400, { error: '프로젝트 파일을 찾을 수 없어요' });
-      let j; try { j = JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return json(res, 400, { error: '프로젝트 파일을 읽을 수 없어요 (형식이 맞지 않아요)' }); }
+      if (!autoAllowed(f) || !/\.dsp$/i.test(f) || !fs.existsSync(f)) return json(res, 400, { error: '편집 파일을 찾을 수 없어요' });
+      let j; try { j = JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return json(res, 400, { error: '편집 파일을 읽을 수 없어요 (형식이 맞지 않아요)' }); }
       const data = j.data || j; const names = new Set(); { let mm = data.media || {}; (Array.isArray(mm) ? mm : Object.values(mm)).forEach((m) => { const nm = typeof m === 'string' ? m : (m && (m.name || m.file)); if (nm) names.add(String(nm)); }); (data.clips || []).concat(data.audio || []).forEach((c) => { const nm = c && (c.name || c.file); if (nm) names.add(String(nm)); }); }
       const added = [], missing = [], linked = []; const jobDir = path.basename(path.dirname(f)) === '결과' ? path.dirname(path.dirname(f)) : path.dirname(f);
       const todo = [...names].filter((nm) => { const N = nm.normalize('NFC'); if (Object.values(media).find((m) => String(m.name).normalize('NFC') === N)) return false;
@@ -1235,12 +1235,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/project/save' && req.method === 'POST') {
       const b = await readBody(req); const id = /^[a-z0-9]{6,16}$/.test(b.id || '') ? b.id : crypto.randomBytes(5).toString('hex');
-      const rec = { id, name: String(b.name || '').trim().slice(0, 80) || '이름 없는 프로젝트', updated: Date.now(), data: b.data || {} };
+      const rec = { id, name: String(b.name || '').trim().slice(0, 80) || '이름 없는 동영상', updated: Date.now(), data: b.data || {} };
       fs.writeFileSync(path.join(PROJ_DIR, id + '.json'), JSON.stringify(rec)); return json(res, 200, { id, name: rec.name, updated: rec.updated });
     }
     if (p === '/api/project' && (req.method === 'GET' || req.method === 'DELETE')) {
-      const id = String(u.searchParams.get('id') || ''); if (!/^[a-z0-9]{6,16}$/.test(id)) return json(res, 400, { error: '잘못된 프로젝트' });
-      const f = path.join(PROJ_DIR, id + '.json'); if (!fs.existsSync(f)) return json(res, 404, { error: '프로젝트를 찾을 수 없어요' });
+      const id = String(u.searchParams.get('id') || ''); if (!/^[a-z0-9]{6,16}$/.test(id)) return json(res, 400, { error: '잘못된 동영상' });
+      const f = path.join(PROJ_DIR, id + '.json'); if (!fs.existsSync(f)) return json(res, 404, { error: '동영상을 찾을 수 없어요' });
       if (req.method === 'DELETE') { fs.unlinkSync(f); return json(res, 200, { ok: true }); }
       return json(res, 200, JSON.parse(fs.readFileSync(f, 'utf8')));
     }

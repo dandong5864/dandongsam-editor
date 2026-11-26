@@ -1712,7 +1712,7 @@ $('#btn-play').onclick = toggle;
 $('#btn-prev').onclick = () => { pause(); seek(0); };
 $('#btn-next').onclick = () => { pause(); layout(); seek(S.total); };
 $('#btn-export').onclick = openExport; $('#btn-capture').onclick = capture; $('#btn-keys').onclick = showKeys;
-$('#btn-new').onclick = async () => { const has = S.clips.length || S.audio.length || S.texts.length; if (has && !(await ask('새 프로젝트를 시작할까요?\n저장하지 않은 작업은 사라져요. (가져온 파일 목록도 비워져요)', { ok: '시작' }))) return; curProj = null; push(); S.clips = []; S.audio = []; S.texts = []; S.tpl = null; S.bg = 'none'; S.sel = null; S.pm = new Set(); S.t = 0; changed(); buildLeft(); };
+$('#btn-new').onclick = async () => { const has = S.clips.length || S.audio.length || S.texts.length; if (has && !(await ask('새 동영상을 시작할까요?\n저장하지 않은 작업은 사라져요. (가져온 파일 목록도 비워져요)', { ok: '시작' }))) return; curProj = null; push(); S.clips = []; S.audio = []; S.texts = []; S.tpl = null; S.bg = 'none'; S.sel = null; S.pm = new Set(); S.t = 0; changed(); buildLeft(); };
 $('#sel-canvas').onchange = (e) => setCanvas(e.target.value);
 $('#t-undo').onclick = undo; $('#t-redo').onclick = redo; $('#t-split').onclick = splitCmd; $('#t-left').onclick = trimLeft; $('#t-right').onclick = trimRight; $('#t-del').onclick = del;
 $('#t-mode').onclick = () => setMode(!S.splitMode);
@@ -1761,7 +1761,7 @@ $('#btn-help').onclick = async () => {
   a2.append(c, ok); d.append(a2); openModal(d); i.focus();
 };
 
-/* ============ 프로젝트 저장 / 열기 / 파일 ============ */
+/* ============ 동영상 저장 / 열기 / 파일 ============ */
 const projData = () => JSON.parse(JSON.stringify({ clips: S.clips, audio: S.audio, texts: S.texts, bg: S.bg, tpl: S.tpl, canvas: S.canvas, zoom: S.zoom, trk: S.trk,
   media: Object.fromEntries([...S.clips, ...S.audio].map((c) => c.mediaId).filter((v, i, ar) => ar.indexOf(v) === i).map((id) => [id, { name: (S.media[id] || {}).name, size: (S.media[id] || {}).size }])) }));
 async function saveProject(name) {
@@ -1834,35 +1834,35 @@ function finishLoad(d, map) {
   let miss = 0; const fix = (l) => (l || []).filter((c) => { const t = map[c.mediaId] || (S.media[c.mediaId] ? c.mediaId : null); if (!t) { miss++; return false; } c.mediaId = t; return true; });
   push(); S.clips = fix(d.clips); S.audio = fix(d.audio); S.pm = new Set([...Object.values(map), ...S.clips.map((c) => c.mediaId), ...S.audio.map((c) => c.mediaId)].filter((id) => S.media[id])); S.texts = d.texts || []; S.bg = nb(d.bg); S.tpl = d.tpl || null; S.canvas = d.canvas || 'original'; S.sel = null; S.t = 0;
   changed(true); fitAll(); if (S.canvas) { const sc = $('#sel-canvas'); if (sc) sc.value = S.canvas; }
-  toast(miss ? `열었어요. 단, 원본 파일 ${miss}개를 찾지 못해 빠졌어요 (미디어 탭에서 다시 가져와 주세요)` : '프로젝트를 열었어요', null, miss ? 8000 : 3500);
+  toast(miss ? `열었어요. 단, 원본 파일 ${miss}개를 찾지 못해 빠졌어요 (미디어 탭에서 다시 가져와 주세요)` : '동영상을 열었어요', null, miss ? 8000 : 3500);
 }
 function fmtDate(ms) { const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 async function quickSave() {
   if (!S.clips.length && !S.audio.length && !S.texts.length) return toast('저장할 작업이 없어요');
   if (curProj) return saveProject(curProj.name);
-  const n = await askText('프로젝트 이름을 적어 주세요', '내 프로젝트 ' + fmtDate(Date.now()).split(' ')[0].replace('/', '월') + '일'); if (n) saveProject(n);
+  const n = await askText('동영상 이름을 적어 주세요', '내 동영상 ' + fmtDate(Date.now()).split(' ')[0].replace('/', '월') + '일'); if (n) saveProject(n);
 }
 async function openProjects() {
-  const d = E('div', 'dlg proj', '<h2>📁 프로젝트</h2>');
+  const d = E('div', 'dlg proj', '<h2>📁 내 동영상</h2>');
   const f = E('div', 'f'); f.append(E('label', '', '지금 작업을 이 이름으로 저장'));
-  const row = E('div', 'btnrow'); const ni = E('input'); ni.type = 'text'; ni.value = curProj ? curProj.name : ''; ni.placeholder = '프로젝트 이름'; ni.onkeydown = (e) => e.stopPropagation();
+  const row = E('div', 'btnrow'); const ni = E('input'); ni.type = 'text'; ni.value = curProj ? curProj.name : ''; ni.placeholder = '동영상 이름'; ni.onkeydown = (e) => e.stopPropagation();
   const sb = E('button', 'primary', '💾 저장'); row.append(ni, sb); f.append(row); d.append(f);
-  const lst = E('div', 'projlist'); d.append(E('div', 'dim', '저장한 프로젝트')); d.append(lst);
+  const lst = E('div', 'projlist'); d.append(E('div', 'dim', '저장한 동영상')); d.append(lst);
   const refresh = async () => {
     lst.innerHTML = ''; const l = await fetch('/api/projects').then((r) => r.json()).catch(() => []);
-    if (!l.length) lst.append(E('div', 'hint', '아직 저장한 프로젝트가 없어요'));
+    if (!l.length) lst.append(E('div', 'hint', '아직 저장한 동영상이 없어요'));
     l.forEach((p) => {
       const r = E('div', 'projrow' + (curProj && curProj.id === p.id ? ' cur' : '')); r.append(E('div', 'pn', `<b>${esc(p.name)}</b><small>${fmtDate(p.updated)} · 클립 ${p.clips}개</small>`));
       const ob = E('button', 'primary sm', '열기'); ob.onclick = async () => { const j = await fetch('/api/project?id=' + p.id).then((x) => x.json()); if (j.error) return toast(j.error); closeModal(); curProj = { id: j.id, name: j.name }; loadProjectData(j.data); };
-      const db = E('button', 'sm', '삭제'); db.onclick = async () => { if (!(await ask(`'${p.name}' 프로젝트를 삭제할까요?\n되돌릴 수 없어요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; refresh(); };
+      const db = E('button', 'sm', '삭제'); db.onclick = async () => { if (!(await ask(`'${p.name}' 동영상을 삭제할까요?\n되돌릴 수 없어요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; refresh(); };
       r.append(ob, db); lst.append(r);
     });
   };
   sb.onclick = async () => { const n = ni.value.trim(); if (!n) return toast('이름을 적어 주세요'); if (curProj && curProj.name !== n) curProj = null; if (await saveProject(n)) refresh(); };
   const fb = E('div', 'btnrow'); const ex = E('button', '', '📤 파일로 내보내기 (.dsp)'); const im = E('button', '', '📥 파일 열기'); const fi = E('input'); fi.type = 'file'; fi.accept = '.dsp,.json'; fi.hidden = true;
-  ex.onclick = () => { const nm = (ni.value.trim() || (curProj && curProj.name) || '프로젝트').replace(/[\\/:*?"<>|]/g, ''); const bl = new Blob([JSON.stringify({ app: 'dandongsam', v: 1, name: nm, data: projData() })], { type: 'application/json' }); const a = E('a'); a.href = URL.createObjectURL(bl); a.download = nm + '.dsp'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+  ex.onclick = () => { const nm = (ni.value.trim() || (curProj && curProj.name) || '동영상').replace(/[\\/:*?"<>|]/g, ''); const bl = new Blob([JSON.stringify({ app: 'dandongsam', v: 1, name: nm, data: projData() })], { type: 'application/json' }); const a = E('a'); a.href = URL.createObjectURL(bl); a.download = nm + '.dsp'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
   im.onclick = () => fi.click();
-  fi.onchange = async () => { try { const j = JSON.parse(await fi.files[0].text()); if (!j.data) throw 0; closeModal(); curProj = null; loadProjectData(j.data); } catch (e) { toast('프로젝트 파일을 읽을 수 없어요'); } };
+  fi.onchange = async () => { try { const j = JSON.parse(await fi.files[0].text()); if (!j.data) throw 0; closeModal(); curProj = null; loadProjectData(j.data); } catch (e) { toast('편집 파일을 읽을 수 없어요'); } };
   fb.append(ex, im, fi); d.append(fb);
   const a2 = E('div', 'acts'); const c = E('button', '', '닫기'); c.onclick = closeModal; a2.append(c); d.append(a2); openModal(d); refresh();
 }
@@ -1994,10 +1994,10 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const tail0 = `영상 모양은 ${rt}야. .dsp 의 "canvas" 값은 "${cv}"로 해 줘. ${ratio === '9:16' ? '폴더 안의 "편집설정.json"에 적힌 템플릿·제목·자막 스타일을 그대로 .dsp 에 써 줘.' + (settings.title ? ' 쇼츠 제목은 영상 내용에 맞게 2줄로 지어 줘.' : '') : '가로 영상이라 제목 글자와 색 띠 템플릿은 넣지 마(.dsp 의 "tpl" 은 null, 제목 글자 항목은 만들지 마). 컷 편집(말 없는 구간·군말·반복 잘라내기)을 한 뒤 하단 자막만 넣고, 자막 스타일은 폴더 안 "편집설정.json"의 subtitle 값을 그대로 써 줘(가로 롱폼 크기라 쇼츠보다 작아). ' + por} 원본 영상은 이름도 내용도 바꾸지 말고 그대로 연결해 줘(비율 보정용 복사본은 만들지 마. 편집기가 알아서 맞춰). 내레이션이 있으면 영상 조각은 소리를 끄고 내레이션은 따로 audio 로 넣어 줘. 중간에 승인을 묻지 말고 끝까지 만들어 줘. 음성 인식이 안 되면 자막을 지어내지 말고 못 만들었다고 알려 줘.` + (lecture ? ' 이 영상은 시청자가 화면을 보며 따라 하는 강의(실습) 영상이야. "하단 자막만"은 제목 글자와 색 띠를 빼라는 뜻일 뿐, 화면 강조를 빼라는 뜻이 아니야. 버튼·메뉴·입력칸을 눌러야 하는 말이 나오는 순간에는 그 위치에 화살표나 네모 테두리를 넣고 누르는 순간에는 클릭 표시를 넣어 줘. 단계가 끝나거나 결과를 확인하는 순간에는 체크 표시를 넣고, 하면 안 되는 것은 ✖ 표시를 넣어 줘. 글씨가 작거나 좁은 영역을 보여 줄 때는 부드러운 확대를 넣어 줘. 예시 이미지나 비교 자료가 있으면 그 말을 하는 타이밍에 띄우고, 여러 곳을 한꺼번에 강조하지 말고 한 번에 한 곳씩 2~4초만 보여 줘. 자막과 중요한 글씨를 가리지 않게 해 줘. 위치를 확신할 수 없는 곳에는 넣지 마. 토큰을 아끼려고 화면 이미지는 "누르세요·클릭·선택·열어"처럼 위치가 필요한 말이 나온 시각에서만 가로 640px 이하로 줄여 보고(여러 장은 한 장에 모아서), 영상 한 편에 전체 20장을 넘기지 마. 확대와 체크는 이미지 없이 말의 타이밍만으로 넣어도 돼. 도형과 확대 만드는 법은 "프로젝트파일_만드는법.txt"의 "강의·화면 녹화용 효과"에 있어. 끝나면 어떤 시각에 어떤 강조를 몇 개 넣었는지 알려 줘.' : '');
       const tail = tail0 + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
-        codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 프로젝트 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
-        gpt: { name: 'ChatGPT', how: '채팅에 영상 파일과 폴더 안의 "프로젝트파일_만드는법.txt", "편집설정.json"을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.', prompt: `첨부한 영상을 편집해 줘. 첨부한 "프로젝트파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 프로젝트 파일(.dsp)을 만들어서 파일로 줘. ${tail}` },
-        claude: { name: 'Claude 앱', how: 'Claude 앱에서 이 폴더를 연결한 뒤 아래 말을 보내요.', prompt: `"${P}" 폴더에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 폴더 안의 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 프로젝트 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 폴더에 접근할 수 없으면 추측하지 말고 먼저 알려 줘.` },
-        cc: { name: 'Claude Code', how: '아래 버튼으로 이 폴더에서 Claude Code 를 열고 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 프로젝트 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.`, term: true },
+        codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
+        gpt: { name: 'ChatGPT', how: '채팅에 영상 파일과 폴더 안의 "프로젝트파일_만드는법.txt", "편집설정.json"을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.', prompt: `첨부한 영상을 편집해 줘. 첨부한 "프로젝트파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. ${tail}` },
+        claude: { name: 'Claude 앱', how: 'Claude 앱에서 이 폴더를 연결한 뒤 아래 말을 보내요.', prompt: `"${P}" 폴더에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 폴더 안의 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 폴더에 접근할 수 없으면 추측하지 말고 먼저 알려 줘.` },
+        cc: { name: 'Claude Code', how: '아래 버튼으로 이 폴더에서 Claude Code 를 열고 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.`, term: true },
       };
       Rt.append(E('div', 'asub', 'AI에게 보낼 말'));
       const tabs = E('div', 'chips aitabs'); Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; draw(); }; tabs.append(t); });
@@ -2077,15 +2077,15 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     const side = E('div', 'hm-side'); top.append(side);
     if (S.clips.length) { const b = E('button', 'hm-btn cont', '↩ 이어서 편집하기'); b.onclick = hide; side.append(b); }
     const ba = E('button', 'hm-btn', 'AI 자동 편집'); ba.onclick = () => { hide(); $('#btn-auto').onclick(); }; side.append(ba);
-    // 내 프로젝트
-    wrap.append(E('h3', '', '내 프로젝트'));
+    // 내 동영상
+    wrap.append(E('h3', '', '내 동영상'));
     const pl = E('div', 'hm-grid'); wrap.append(pl);
     fetch('/api/projects').then((r) => r.json()).catch(() => []).then((l) => {
-      if (!l.length) { pl.append(E('div', 'hm-empty', '아직 저장한 프로젝트가 없어요. 편집 중에 💾 저장을 눌러 보세요.')); return; }
+      if (!l.length) { pl.append(E('div', 'hm-empty', '아직 저장한 동영상이 없어요. 편집 중에 💾 저장을 눌러 보세요.')); return; }
       l.slice(0, 12).forEach((p) => { const c = E('button', 'hm-proj', `<div class="hm-pi">🎬</div><div class="hm-pn">${esc(p.name)}</div><small>${fmtDate(p.updated)} · 클립 ${p.clips}개</small>`);
         c.onclick = async () => { const j = await fetch('/api/project?id=' + p.id).then((x) => x.json()).catch(() => ({ error: '열 수 없어요' })); if (j.error) return toast(j.error); hide(); curProj = { id: j.id, name: j.name }; loadProjectData(j.data); };
-        const w = E('div', 'hm-pw'); const x = E('button', 'hm-pdel', '🗑 삭제'); x.title = '이 프로젝트 삭제';
-        x.onclick = async (ev) => { ev.stopPropagation(); if (!(await ask(`'${p.name}' 프로젝트를 삭제할까요?\n되돌릴 수 없어요. 가져온 영상 파일은 지워지지 않아요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; w.remove(); if (!pl.children.length) pl.append(E('div', 'hm-empty', '아직 저장한 프로젝트가 없어요. 편집 중에 💾 저장을 눌러 보세요.')); };
+        const w = E('div', 'hm-pw'); const x = E('button', 'hm-pdel', '🗑 삭제'); x.title = '이 동영상 삭제';
+        x.onclick = async (ev) => { ev.stopPropagation(); if (!(await ask(`'${p.name}' 동영상을 삭제할까요?\n되돌릴 수 없어요. 가져온 영상 파일은 지워지지 않아요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; w.remove(); if (!pl.children.length) pl.append(E('div', 'hm-empty', '아직 저장한 동영상이 없어요. 편집 중에 💾 저장을 눌러 보세요.')); };
         w.append(c, x); pl.append(w); });
     });
     const cols = E('div', 'hm-cols'); wrap.append(cols); const yc = E('div', 'hm-col'), bc = E('div', 'hm-col'); cols.append(yc, bc);
