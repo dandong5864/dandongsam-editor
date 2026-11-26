@@ -1237,7 +1237,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/stickers' && req.method === 'GET') {
       let fl = []; try { fl = fs.readdirSync(STICKER_DIR).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}
       let bl = []; try { bl = fs.readdirSync(BUILTIN_STK).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}
-      return json(res, 200, fl.map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: /\.gif$/i.test(f) })).concat(bl.filter((f) => !fl.includes(f)).map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: false, builtin: true }))));
+      return json(res, 200, fl.map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: /\.gif$/i.test(f) })).concat(bl.filter((f) => !fl.includes(f)).map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: false, builtin: true, name: f.replace(/\.[^.]+$/, '').replace(/^단축키_(.*)$/, '$1 (키보드)').replace(/^텍스트_(.*)$/, '$1 (글자)') }))));
     }
     if (p === '/api/sticker/upload' && req.method === 'POST') {
       const raw = path.basename(u.searchParams.get('name') || 'sticker.png'); const ext = path.extname(raw).toLowerCase();
