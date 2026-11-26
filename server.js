@@ -1356,7 +1356,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && p === '/api/examples/send') {
       const b = await readBody(req); const link = String(b.link || '').trim();
-      if (!ytId(link) && !/^https?:\/\/\S+\.(mp4|webm|mov)(\?\S*)?$/i.test(link)) return json(res, 200, { error: '유튜브 영상 링크를 붙여 넣어 주세요' });
+      if (!ytId(link) && !/^https?:\/\/\S+\.(mp4|webm|mov)(\?\S*)?$/i.test(link)) return json(res, 200, { error: '제작된 영상 링크를 붙여 넣어 주세요' });
       if (!exCfg) { try { await cachedFeed('ex', examplesFeed); } catch (e) {} }
       const sd = (exCfg && exCfg.send) || {}, u = formPostUrl(sd.form || exCfg && exCfg.form); if (!u || !sd.link) return json(res, 200, { error: '지금은 보낼 수 없어요' });
       if (Date.now() - (global.__lastSend || 0) < 20000) return json(res, 200, { error: '잠시 후에 다시 보내 주세요' });

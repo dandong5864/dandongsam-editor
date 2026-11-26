@@ -2276,11 +2276,11 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
   // 내 영상 자랑하기: 링크만 붙여 넣으면 바로 보내져요 (단동샘이 확인한 뒤 예시 칸에 올라가요)
   function brag(msg, box) {
     const d = E('div', 'dlg', '<h2>🙌 내 영상 자랑하기</h2>'); box = box || '자랑 영상 모음';
-    const p = E('div', 'brag-msg'); p.textContent = msg || `단동샘 편집기로 만든 영상을 자랑해 주세요!\n링크를 붙여 넣고 보내기를 누르면, 확인한 뒤 ${box}에 올라가요.`; d.append(p);
+    const p = E('div', 'brag-msg'); p.textContent = msg || `단동샘 편집기로 만든 영상을 자랑해 주세요!\n제작된 영상 링크를 붙여 넣고 보내기를 누르면, 확인한 뒤 ${box}에 올라가요.`; d.append(p);
     const fld = (lb, ph) => { const f = E('div', 'f'); f.append(E('label', '', lb)); const i = E('input'); i.type = 'text'; i.placeholder = ph; i.onkeydown = (e) => e.stopPropagation(); f.append(i); d.append(f); return i; };
-    const li = fld('영상 링크', 'https://youtu.be/…'), ti = fld('제목', '안 써도 돼요 (비우면 유튜브 제목)'), ni = fld('이름', '안 써도 돼요');
+    const li = fld('영상 링크', '제작된 영상 링크를 붙여 넣어 주세요'), ti = fld('제목', '안 써도 돼요'), ni = fld('이름', '안 써도 돼요');
     const a2 = E('div', 'acts'); const c = E('button', '', '취소'); c.onclick = closeModal; const ok = E('button', 'primary', '보내기');
-    ok.onclick = async () => { if (!li.value.trim()) { li.focus(); return toast('영상 링크를 붙여 넣어 주세요'); } ok.disabled = true;
+    ok.onclick = async () => { if (!li.value.trim()) { li.focus(); return toast('제작된 영상 링크를 붙여 넣어 주세요'); } ok.disabled = true;
       const z = await fetch('/api/examples/send', { method: 'POST', body: JSON.stringify({ link: li.value, title: ti.value, name: ni.value }) }).then((x) => x.json()).catch(() => ({ error: '서버에 연결할 수 없어요' }));
       ok.disabled = false; if (z.error) return toast(z.error); closeModal(); toast(`보냈어요! 확인한 뒤 ${box}에 올라가요`); };
     a2.append(c, ok); d.append(a2); openModal(d); li.focus();
