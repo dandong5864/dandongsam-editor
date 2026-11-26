@@ -2,7 +2,7 @@
   "name": "video-toolkit",
   "version": "1.0.1",
   "private": true,
-  "description": "캡컷 스타일 로컬 영상 편집기",
+  "description": "쉬운 무료 로컬 영상 편집기",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -237,7 +237,7 @@ S.trk = S.trk || {};
 const tf = (k) => S.trk[k] || (S.trk[k] = {});
 const trkOfText = (x) => x.kind === 'sub' ? 's' : x.kind === 'pip' ? 'p' : x.kind === 'text' ? 't' : 'k';
 const lockedEl = (el) => { const t = el && el.closest && el.closest('.track'); return !!(t && tf(t.id.slice(6)).l); };
-/* ===== 레이어 사이 끼워 넣기 (캡컷처럼 줄이 보이고 거기에 놓으면 새 레이어) ===== */
+/* ===== 레이어 사이 끼워 넣기 (줄이 보이고 거기에 놓으면 새 레이어) ===== */
 const KBASE = { bg: 0, pip: 0.5, sticker: 1, shape: 1, fx: 1, zoom: 1, text: 2, sub: 3 };
 let dragKind = '';
 function normLanes() {   // 같은 줄 묶음(스티커·텍스트·자막·오버레이) 안에서 레이어 번호 정리: 겹치면 새 레이어, 빈 레이어는 없애요
@@ -519,7 +519,7 @@ function renderOv0(force) {
     ov.append(d);
   });
 }
-/* 가이드 선: 끌다가 가운데·가장자리에 가까워지면 붙으면서 분홍 선이 나와요 (캡컷처럼) */
+/* 가이드 선: 끌다가 가운데·가장자리에 가까워지면 붙으면서 분홍 선이 나와요 */
 const snapG = E('div'); snapG.id = 'snapg'; stage.append(snapG);
 function showGuides(xs, ys) {
   snapG.innerHTML = '';
@@ -680,7 +680,7 @@ function renderTL0() {
       d.style.left = x.start * S.zoom + 'px'; d.style.width = Math.max(6, (x.end - x.start) * S.zoom) + 'px'; if (x.kind === 'bg') { d.style.background = x.color || '#1f6feb'; d.style.borderColor = 'rgba(255,255,255,.35)'; }
       d.innerHTML = `<i class="h l" data-h="l"></i><i class="h r" data-h="r"></i><span class="cl-name">${esc(kind === 'pip' ? ((S.media[x.mediaId] || {}).name || '영상') : kind === 'sticker' ? x.name || (x.kind === 'bg' ? '배경' : x.kind === 'shape' ? (SHAPE_NAMES[x.shape] || '도형') : x.kind === 'fx' ? (x.mode === 'blur' ? '블러' : '모자이크') : x.kind === 'zoom' ? '확대 ' + (x.scale || 150) + '%' : '스티커') : String(x.text).replace(/\n/g, ' '))}</span>`; if (kind === 'pip') { const pm = S.media[x.mediaId]; if (pm && pm.thumb) d.style.backgroundImage = `url(/api/thumb/${pm.id})`; } tr.append(d);
     });
-    // 같은 시간에 겹치는 항목은 줄을 나눠서 위아래로 쌓아요 (캡컷처럼)
+    // 같은 시간에 겹치는 항목은 줄을 나눠서 위아래로 쌓아요
     const items = [...tr.children].map((el) => { const x = S.texts.find((q) => q.id === el.dataset.id); return { el, x }; }).filter((o) => o.x).sort((p, q) => p.x.start - q.x.start || p.x.end - q.x.end);
     const nL = NL[({ text: 't', sticker: 'k', sub: 's', pip: 'p' })[kind]] || 0;
     items.forEach((o) => { o.el.style.top = `calc(${5 + (nL - 1 - o.x.lane) * 40}px * var(--rs, 1))`; o.el.style.bottom = 'auto'; o.el.style.height = 'calc(30px * var(--rs, 1))'; });
@@ -1378,7 +1378,7 @@ addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) {
 function fillMedia() {
   const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = Object.values(S.media).filter((m) => S.pm.has(m.id) && !m.color && !m.hide);
   if (!ms.length) { l.append(E('div', 'empty-media', '아직 가져온 파일이 없어요.<br>＋ 가져오기를 누르거나<br>파일을 끌어다 놓으세요.')); return; }
-  ms.forEach((m) => {   // 캡컷처럼 썸네일 타일: 위에 그림 + 길이, 아래에 이름
+  ms.forEach((m) => {   // 썸네일 타일: 위에 그림 + 길이, 아래에 이름
     const it = E('div', 'mitem');
     const th = E('div', 'th', m.hasVideo ? '' : '🎵'); if (m.thumb) th.style.backgroundImage = `url(/api/thumb/${m.id})`;
     th.append(E('span', 'dur', fmt(m.duration, 0)));
@@ -1393,11 +1393,11 @@ function fillMedia() {
   });
 }
 
-/* ============ 왼쪽 탭 (캡컷과 같은 순서: 미디어 · 오디오 · 텍스트 · 자막 · 템플릿) ============ */
+/* ============ 왼쪽 탭 (미디어 · 오디오 · 텍스트 · 자막 · 템플릿) ============ */
 let ltab = 'media';
 function renderMedia() { if (ltab === 'media') fillMedia(); else if (ltab !== 'audio') buildLeft(); }
 let subView = 'list';
-// 스타일 편집: 모든 자막의 디자인을 한 번에 바꿔요 (캡컷의 '스타일' 탭처럼)
+// 스타일 편집: 모든 자막의 디자인을 한 번에 바꿔요
 function buildSubStyle(d) {
   const subs = () => S.texts.filter((x) => x.kind === 'sub');
   const ref = subs()[0] || { font: (S.fonts[0] && S.fonts[0].family) || 'sans-serif', size: 86, color: '#ffffff', outline: 8, outlineColor: '#000000', y: 81, x: 50 };
@@ -1913,7 +1913,7 @@ async function openProjects() {
 $('#btn-save').onclick = quickSave; $('#btn-proj').onclick = openProjects;
 document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); } });
 
-/* ============ 칸 크기 조절 (캡컷처럼 경계선을 끌어서) ============ */
+/* ============ 칸 크기 조절 (경계선을 끌어서) ============ */
 {
   const body = document.body, LK = 'vtk.layout.v1', DEF = { lw: 380, rw: 350, th: 340 };
   let L = Object.assign({}, DEF); try { Object.assign(L, JSON.parse(localStorage.getItem(LK) || '{}')); } catch (e) {}
@@ -2210,7 +2210,7 @@ async function sttDialog() {
 }
 
 
-/* ===== 왼쪽 목록 → 타임라인으로 끌어다 놓기 (캡컷처럼) ===== */
+/* ===== 왼쪽 목록 → 타임라인으로 끌어다 놓기 ===== */
 (function dropToTimeline() {
   const isOurs = (e) => [...(e.dataTransfer.types || [])].includes('text/x-vtk');
   const tAt = (e) => Math.max(0, (e.clientX - inner.getBoundingClientRect().left) / S.zoom);

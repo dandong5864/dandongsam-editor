@@ -221,7 +221,7 @@ kbd{background:var(--panel2);border:1px solid #3a3a44;border-bottom-width:2px;bo
 .gv::after{content:"";position:absolute;inset:0 -4px}.gh::after{content:"";position:absolute;inset:-4px 0}
 body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 
-/* 끌어서 순서 바꾸기 (캡컷처럼 들어 올려서 이동) */
+/* 끌어서 순서 바꾸기 (들어 올려서 이동) */
 
 /* 단순한 흰색 선택 표시 (이전 하늘색·빛 효과 대체) */
 .clip.sel,.aclip.sel,.tclip.sel{border-color:#fff!important;box-shadow:none;z-index:3}
@@ -405,7 +405,7 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .aimp{display:flex;align-items:center;justify-content:center;width:100%;min-height:58px;margin:4px 0 10px;padding:0 18px;font-size:18px!important;font-weight:800;border-radius:14px}
 .ajobs.res{max-height:220px}.ajobs.res .hint{padding:10px 4px;font-size:14px}
 
-/* 가져온 파일: 캡컷처럼 썸네일 타일 */
+/* 가져온 파일: 썸네일 타일 */
 #media-list{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));grid-auto-rows:max-content;gap:10px 8px;align-content:start;flex-direction:unset}
 #media-list .empty-media{grid-column:1/-1}
 .mitem{display:flex!important;flex-direction:column;gap:5px;padding:0!important;background:transparent!important;border:0!important;border-radius:6px;position:relative}
