@@ -257,7 +257,7 @@ function listFonts() {
 }
 const pubFonts = () => listFonts().map(({ path: _p, ...r }) => r);
 
-const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, isImage: !!m.isImage, hasAlpha: !!hasAlpha(m) });
+const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), color: m.color || null });
 
 // ---- 파일 스트리밍(Range 지원) ----
 function serveFile(req, res, file, type) {
@@ -990,11 +990,13 @@ function openApp(url) {
 let lastPing = 0, byeAt = 0;
 if (process.env.AUTO_QUIT) {
   const busy = () => Object.values(jobs).some((j) => j && (j.status === 'running' || j.status === 'queued'));
+  let lastTick = Date.now();
   setInterval(() => {
+    const now = Date.now(), gap = now - lastTick; lastTick = now;
+    if (gap > 20000) { lastPing = now; byeAt = 0; return; }   // 컴퓨터가 잠들었다 깬 직후엔 화면이 다시 신호를 보낼 때까지 기다려요
     if (busy()) { byeAt = 0; return; }
-    const now = Date.now();
     if (byeAt && now - byeAt > 10000) process.exit(0);
-    if (lastPing && now - lastPing > 180000) process.exit(0);
+    if (lastPing && now - lastPing > 1800000) process.exit(0);   // 30분 동안 아무 신호가 없을 때만 (창이 비정상으로 닫힌 경우)
   }, 3000).unref();
 }
 
@@ -1180,7 +1182,10 @@ const server = http.createServer(async (req, res) => {
       if (!it || !it.hasVideo) return json(res, 400, { error: '영상이 없습니다' });
       const out = path.join(DIRS.cap, `캡처_${stamp()}.png`);
       await run(FFMPEG, ['-y', '-ss', n(Math.max(0, +b.t || 0)), '-i', it.file, '-frames:v', '1', out]);
-      return json(res, 200, { file: out });
+      let pm = null;   // 캡처한 그림은 미디어 목록에도 자동으로 넣어 줘요
+      try { const id = crypto.randomBytes(6).toString('hex'), dest = path.join(DIRS.media, id + '.png'); fs.copyFileSync(out, dest); const m = await ingest(id, path.basename(out), dest, '.png'); media[id] = m; saveDB(); pm = pub(m); }
+      catch (e) { pm = null; }
+      return json(res, 200, { file: out, media: pm });
     }
     if (req.method === 'POST' && p === '/api/reveal') {
       const b = await readBody(req); revealPath(String(b.file || '')); return json(res, 200, { ok: true });
@@ -1280,6 +1285,17 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/sfx/file' && req.method === 'GET') {
       const f = sfxPath(u.searchParams.get('p')); if (!f) { res.writeHead(404); return res.end(); } return serveFile(req, res, f);
+    }
+    if (p === '/api/color/add' && req.method === 'POST') {   // 한 가지 색으로 꽉 찬 그림(영상 클립용)
+      const b = await readBody(req); const hx = String(b.color || '').toLowerCase();
+      if (!/^#[0-9a-f]{6}$/.test(hx)) return json(res, 400, { error: '색을 알 수 없어요' });
+      const have = Object.values(media).find((m) => m && m.color === hx && m.file && fs.existsSync(m.file));
+      if (have) return json(res, 200, pub(have));
+      const id = crypto.randomBytes(6).toString('hex'), dest = path.join(DIRS.media, id + '.still.mp4');
+      try {
+        await run(FFMPEG, ['-y', '-f', 'lavfi', '-i', `color=c=0x${hx.slice(1)}:s=1920x1080:r=30:d=30`, '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '28', '-g', '300', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dest]);
+        const m = await ingest(id, '색 배경 ' + hx.toUpperCase(), dest, '.mp4'); m.color = hx; m.isImage = true; media[id] = m; saveDB(); return json(res, 200, pub(m));
+      } catch (e) { try { fs.unlinkSync(dest); } catch (e2) {} return json(res, 500, { error: e.message }); }
     }
     if (p === '/api/sfx/add' && req.method === 'POST') {
       const b = await readBody(req); const f = sfxPath(b.rel); if (!f) return json(res, 404, { error: '파일을 찾을 수 없어요' });

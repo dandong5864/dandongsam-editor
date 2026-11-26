@@ -321,35 +321,64 @@ function syncPip() {
   Object.keys(bgEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'bg')) { bgEls[id].remove(); delete bgEls[id]; } });
   Object.keys(pipEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'pip')) { pipEls[id].pause(); pipEls[id].remove(); delete pipEls[id]; } });
 }
-let ttlTxt = '', ttlSmall = null, ttlColor = '#1f6feb';
-const CARD_RECS = [{ n: 'STEP 번호 + 제목', col: '#1f6feb', small: 'STEP {n}', title: '' }, { n: '다음 강의 안내', col: '#111111', small: '다음 강의', title: '' }, { n: '오늘 배울 내용', col: '#8e44ff', small: '오늘 배울 내용', title: '' }, { n: '정리하기', col: '#00C48C', small: '정리', title: '' }, { n: '마무리 인사', col: '#ff2d92', small: '', title: '감사합니다' }];
+let ttlTxt = '', ttlSmall = null, ttlColor = '#000000';
+const CARD_RECS = [{ n: 'STEP 번호 + 제목', col: '#1f6feb', small: 'STEP {n}', title: '' }, { n: '정리하기', col: '#00C48C', small: '정리', title: '' }, { n: '마무리 인사', col: '#ff2d92', small: '', title: '감사합니다' }, { n: '자료 받기', col: '#FFFD00', small: '설명란 또는 고정댓글 확인', title: '자료 받기' }];
 const cardFg = (c) => { const h = c.replace('#', ''), l = (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000; return l > 150 ? '#111111' : '#ffffff'; };
+const CARD_SEC = 2.5, CARD_VOL = 60;   // 제목 화면: 기본 2.5초, 시작할 때 효과음(뿅) 볼륨 60%
+let cardSfxId = null;
+async function cardSfx() {   // 편집기에 들어 있는 '뿅' 효과음을 미디어로 가져와요 (한 번 가져오면 다시 써요)
+  if (cardSfxId && S.media[cardSfxId]) return S.media[cardSfxId];
+  try {
+    const r = await fetch('/api/sfx').then((x) => x.json()), f = (r.files || []).find((x) => /^뽁\.|뿅/.test(x.name || ''));
+    if (!f) return null;
+    const m = await fetch('/api/sfx/add', { method: 'POST', body: JSON.stringify({ rel: f.rel }) }).then((z) => z.json());
+    if (m.error) return null; cardSfxId = m.id; return m;
+  } catch (e) { return null; }
+}
+// 제목 화면 넣기: 색 배경은 영상 클립으로(뒤 영상은 밀려요), 글자는 그 위에, 효과음은 시작 위치에
+async function insertCard({ color, sec, items }) {
+  let bgm = null, sm = null;
+  try {
+    if (color) { bgm = await fetch('/api/color/add', { method: 'POST', body: JSON.stringify({ color }) }).then((r) => r.json()); if (!bgm || bgm.error) throw new Error((bgm && bgm.error) || '색 배경을 만들지 못했어요'); }
+    sm = await cardSfx();
+  } catch (e) { return toast('제목 화면을 넣지 못했어요: ' + e.message); }
+  layout(); let t0 = Math.round(S.t * 100) / 100;
+  if (bgm) { S.media[bgm.id] = bgm; S.pm.delete(bgm.id); const c = addToTimeline(bgm.id, true, { out: sec, fit: 'cover' }); layout(); if (c) t0 = Math.round(c.start * 100) / 100; } else push();
+  let last = null;
+  items.forEach((o) => { const x = { ...o, id: nid() }; x.start = Math.round((t0 + (o.off || 0)) * 100) / 100; x.end = Math.round((x.start + (o.len || sec)) * 100) / 100; delete x.off; delete x.len; S.texts.push(x); last = x; });
+  if (sm) { if (!S.media[sm.id]) S.media[sm.id] = sm; S.audio.push({ id: nid(), mediaId: sm.id, start: t0, in: 0, out: sm.duration, vol: CARD_VOL }); }
+  if (last) S.sel = { type: 't', id: last.id };
+  changed(true); if (ltab === 'tpl') buildLeft();
+}
 function addTitleCard(title, small, color) {   // 강의 단계가 바뀔 때: 색 배경 + 가운데 제목(+위쪽 작은 글)
-  push(); layout();
-  const st = Math.round(S.t * 100) / 100, en = Math.round((st + 3.5) * 100) / 100, hx = color.replace('#', ''), lum = (parseInt(hx.slice(0, 2), 16) * 299 + parseInt(hx.slice(2, 4), 16) * 587 + parseInt(hx.slice(4, 6), 16) * 114) / 1000, fg = lum > 150 ? '#111111' : '#ffffff';
+  const hx = color.replace('#', ''), lum = (parseInt(hx.slice(0, 2), 16) * 299 + parseInt(hx.slice(2, 4), 16) * 587 + parseInt(hx.slice(4, 6), 16) * 114) / 1000, fg = lum > 150 ? '#111111' : '#ffffff';
   const sample = S.texts.find((t) => t.kind === 'text'), font = sample ? sample.font : ((S.fonts[0] && S.fonts[0].family) || 'sans-serif');
-  const mk = (text, size, y) => ({ id: nid(), kind: 'text', start: st, end: en, text, colors: [], color: fg, font, size, outline: 0, outlineColor: '#000000', x: 50, y });
-  const bg = { id: nid(), kind: 'bg', start: st, end: en, color, opacity: 100, lane: 0, card: true };
-  S.texts.push(bg); let sel = bg;
-  if (small) S.texts.push(mk(small, 56, 36));
-  if (title) { sel = mk(title, 120, small ? 52 : 50); S.texts.push(sel); }
-  S.sel = { type: 't', id: sel.id }; changed(true); if (ltab === 'tpl') buildLeft();
+  const mk = (text, size, y) => ({ kind: 'text', off: 0, len: CARD_SEC, text, colors: [], color: fg, font, size, outline: 0, outlineColor: '#000000', x: 50, y });
+  const items = []; if (small) items.push(mk(small, 56, 36)); if (title) items.push(mk(title, 120, small ? 52 : 50));
+  return insertCard({ color, sec: CARD_SEC, items });
 }
 const CARD_KEY = 'vtk.cards.v1';
 const myCards = () => { try { return JSON.parse(localStorage.getItem(CARD_KEY) || '[]'); } catch (e) { return []; } };
 const saveMyCards = (l) => { try { localStorage.setItem(CARD_KEY, JSON.stringify(l)); } catch (e) {} };
-function saveCard(name) {   // 지금 고른 제목 화면(배경+글자)을 내 템플릿으로 저장
-  const s = getSel(); if (!s || s.type !== 't' || !['bg', 'text'].includes(s.c.kind)) return toast('저장할 제목 화면(배경이나 글자)을 타임라인에서 먼저 눌러 주세요');
-  const a = s.c.start, b = s.c.end, its = S.texts.filter((x) => (x.kind === 'bg' || x.kind === 'text') && x.start < b - 1e-6 && a < x.end - 1e-6);
-  const base = Math.min(...its.map((x) => x.start));
+function saveCard(name) {   // 지금 고른 제목 화면(배경 클립 + 글자)을 내 템플릿으로 저장
+  const s = getSel(); if (!s) return toast('저장할 제목 화면(색 배경이나 글자)을 타임라인에서 먼저 눌러 주세요');
+  const isColorClip = s.type === 'v' && (S.media[s.c.mediaId] || {}).color;
+  if (!isColorClip && !(s.type === 't' && ['bg', 'text'].includes(s.c.kind))) return toast('저장할 제목 화면(색 배경이나 글자)을 타임라인에서 먼저 눌러 주세요');
+  layout(); let a, b;
+  if (isColorClip) { a = s.c.start; b = s.c.start + dur(s.c); } else { a = s.c.start; b = s.c.end; }
+  const clip = S.clips.find((c) => (S.media[c.mediaId] || {}).color && c.start < b - 1e-6 && a < c.start + dur(c) - 1e-6);
+  const its = S.texts.filter((x) => (x.kind === 'bg' || x.kind === 'text') && x.start < b - 1e-6 && a < x.end - 1e-6);
+  if (!clip && !its.length) return toast('저장할 제목 화면을 찾지 못했어요');
+  const base = clip ? clip.start : Math.min(...its.map((x) => x.start));
   const items = its.map((x) => { const o = JSON.parse(JSON.stringify(x)); o.off = Math.round((x.start - base) * 100) / 100; o.len = Math.round((x.end - x.start) * 100) / 100; ['id', 'start', 'end'].forEach((k) => delete o[k]); return o; });
+  if (clip) items.unshift({ kind: 'bg', color: S.media[clip.mediaId].color, off: 0, len: Math.round(dur(clip) * 100) / 100, opacity: 100 });
   const l = myCards().filter((c) => c.n !== name); l.push({ n: name, items }); saveMyCards(l); toast('내 제목 화면으로 저장했어요');
 }
 function addCard(c) {
-  push(); layout(); const t0 = Math.round(S.t * 100) / 100; let last = null;
-  const big = c.items.filter((x) => x.kind === 'text').sort((p, q) => (q.size || 0) - (p.size || 0))[0], ti = ttlTxt.trim();
-  c.items.forEach((o) => { const x = JSON.parse(JSON.stringify(o)); x.id = nid(); x.start = Math.round((t0 + (o.off || 0)) * 100) / 100; x.end = Math.round((x.start + (o.len || 3)) * 100) / 100; delete x.off; delete x.len; if (ti && o === big) x.text = ti; S.texts.push(x); last = x; });
-  if (last) S.sel = { type: 't', id: last.id }; changed(true); if (ltab === 'tpl') buildLeft();
+  const ti = ttlTxt.trim(), texts = c.items.filter((x) => x.kind !== 'bg'), big = texts.filter((x) => x.kind === 'text').sort((p, q) => (q.size || 0) - (p.size || 0))[0], bg = c.items.find((x) => x.kind === 'bg');
+  const items = texts.map((o) => { const x = JSON.parse(JSON.stringify(o)); if (ti && o === big) x.text = ti; return x; });
+  const sec = bg ? (bg.len || CARD_SEC) : (Math.max(...texts.map((x) => x.len || CARD_SEC), CARD_SEC));
+  return insertCard({ color: bg ? bg.color : null, sec, items });
 }
 function addBg(color) {
   push(); layout(); const st = Math.round(S.t * 100) / 100, x = { id: nid(), kind: 'bg', start: st, end: Math.round((st + 3) * 100) / 100, color: color || '#1f6feb', opacity: 100, lane: 0 };
@@ -834,19 +863,19 @@ function select(type, id) {
   if (type === 't' && rtab === 'sub') setTimeout(() => { const r = document.querySelector(`#props .subrow[data-id="${id}"]`); if (r) r.scrollIntoView({ block: 'center' }); }, 0);
   if (ltab === 'text' || ltab === 'stk' || ltab === 'tpl') buildLeft();
 }
-function addToTimeline(mid, atHead) {
-  const m = S.media[mid]; if (!m) return; push();
+function addToTimeline(mid, atHead, over) {
+  const m = S.media[mid]; if (!m) return null; push(); let made = null;
   if (m.hasVideo) {
-    const c = { id: nid(), mediaId: mid, in: 0, out: defDur(m), ...dflt(), fit: (S.clips[0] && S.clips[0].fit) || 'contain' };
+    const c = { id: nid(), mediaId: mid, in: 0, out: defDur(m), ...dflt(), fit: (S.clips[0] && S.clips[0].fit) || 'contain', ...(over || {}) }; made = c;
     if (atHead && S.clips.length) {   // 재생 막대가 있는 곳에 끼워 넣어요 (클립 가운데면 둘로 나눠서)
       layout(); const t = S.t; let idx = S.clips.length;
       for (let i = 0; i < S.clips.length; i++) { const k = S.clips[i], e = k.start + dur(k); if (t < k.start + 0.03) { idx = i; break; } if (t < e - 0.03) { splitClip(k, t); idx = i + 1; break; } }
-      layout(); const at = idx < S.clips.length ? S.clips[idx].start : S.total; S.clips.splice(idx, 0, c); layout(); rippleAfter(at, dur(c)); S.sel = { type: 'v', id: c.id }; changed(); seek(c.start + 0.01, true); return;
+      layout(); const at = idx < S.clips.length ? S.clips[idx].start : S.total; S.clips.splice(idx, 0, c); layout(); rippleAfter(at, dur(c)); S.sel = { type: 'v', id: c.id }; changed(); seek(c.start + 0.01, true); return made;
     }
     S.clips.push(c);
   }
   else { S.audio.push({ id: nid(), mediaId: mid, start: S.t, in: 0, out: m.duration, vol: 100 }); }
-  changed();
+  changed(); return made;
 }
 function setCanvas(v) { push(); S.canvas = v; changed(); }
 
@@ -1088,7 +1117,7 @@ function bgControls(p) {
   const nxt = S.texts.filter((x) => x.kind === 'bg' && x.card).length + 1;
   const mi = (ph, val, set) => { const i = E('input', 'ttl-in'); i.type = 'text'; i.placeholder = ph; i.value = val; i.maxLength = 40; i.onkeydown = (e) => e.stopPropagation(); i.oninput = () => set(i.value); return i; };
   p.append(mi('제목 (예: 영상편집방법)', ttlTxt, (v) => { ttlTxt = v; }), mi('위쪽 작은 글 (예: STEP 1)', ttlSmall == null ? 'STEP ' + nxt : ttlSmall, (v) => { ttlSmall = v; }));
-  const tsw = E('div', 'bgsw'); ['#1f6feb', '#111111', '#ffffff', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b' + (c === ttlColor ? ' on' : ''), ''); b.style.background = c; b.title = c; b.onclick = () => { ttlColor = c; tsw.querySelectorAll('.bgsw-b').forEach((q) => q.classList.toggle('on', q === b)); }; tsw.append(b); }); p.append(tsw);
+  const tsw = E('div', 'bgsw'); ['#000000', '#1f6feb', '#ffffff', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b' + (c === ttlColor ? ' on' : ''), ''); b.style.background = c; b.title = c; b.onclick = () => { ttlColor = c; tsw.querySelectorAll('.bgsw-b').forEach((q) => q.classList.toggle('on', q === b)); }; tsw.append(b); }); p.append(tsw);
   const tb = E('button', 'primary bigbtn', '＋ 제목 화면 추가'); tb.onclick = () => { addTitleCard(ttlTxt.trim(), ttlSmall == null ? 'STEP ' + nxt : ttlSmall.trim(), ttlColor); ttlSmall = null; }; p.append(tb);
   p.append(sec('추천 제목 화면'));
   const rec = E('div', 'tplcol');
@@ -1335,7 +1364,7 @@ addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) {
 
 /* ============ 미디어 패널 / 업로드 ============ */
 function fillMedia() {
-  const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = Object.values(S.media).filter((m) => S.pm.has(m.id));
+  const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = Object.values(S.media).filter((m) => S.pm.has(m.id) && !m.color);
   if (!ms.length) { l.append(E('div', 'empty-media', '아직 가져온 파일이 없어요.<br>＋ 가져오기를 누르거나<br>파일을 끌어다 놓으세요.')); return; }
   ms.forEach((m) => {   // 캡컷처럼 썸네일 타일: 위에 그림 + 길이, 아래에 이름
     const it = E('div', 'mitem');
@@ -1544,7 +1573,8 @@ async function capture() {
   try {
     const r = await fetch('/api/capture', { method: 'POST', body: JSON.stringify({ mediaId: c.mediaId, t: st }) }).then((r) => r.json());
     if (r.error) throw new Error(r.error);
-    toast('📷 캡처 저장됨 (원본 화질 PNG)', { label: '폴더 열기', fn: () => reveal(r.file) });
+    if (r.media) { S.media[r.media.id] = r.media; renderMedia(); }
+    toast(r.media ? '📷 캡처를 미디어에 넣었어요 (원본 화질 PNG도 저장됨)' : '📷 캡처 저장됨 (원본 화질 PNG)', { label: '폴더 열기', fn: () => reveal(r.file) });
   } catch (e) { toast('캡처 실패: ' + e.message); }
 }
 const reveal = (f) => fetch('/api/reveal', { method: 'POST', body: JSON.stringify({ file: f }) });
@@ -1733,6 +1763,7 @@ $('#t-zoom').oninput = (e) => setZoom(+e.target.value);
 
 /* ============ 창을 닫으면 프로그램도 종료 ============ */
 setInterval(() => { fetch('/api/ping').catch(() => {}); }, 5000); fetch('/api/ping').catch(() => {});
+addEventListener('focus', () => { fetch('/api/ping').catch(() => {}); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) fetch('/api/ping').catch(() => {}); });
 addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } catch (e) {} });
 
 /* ============ 시작 ============ */
@@ -1971,7 +2002,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         if (!lecture || cardKey === 'none') return null;
         if (cardKey[0] === 'm') { const c = cardsL[+cardKey.slice(1)]; return { name: c.n, items: c.items }; }
         const c = CARD_RECS[+cardKey.slice(1)], fg = cardFg(c.col);
-        return { name: c.n, seconds: 3.5, bg: { kind: 'bg', color: c.col, opacity: 100 }, small: c.small ? { kind: 'text', text: c.small, size: 56, y: 36, x: 50, color: fg, outline: 0 } : null, title: { kind: 'text', text: c.title || '(그 단계의 주제 이름)', size: 120, y: c.small ? 52 : 50, x: 50, color: fg, outline: 0 } };
+        return { name: c.n, seconds: 2.5, bg: { kind: 'bg', color: c.col, opacity: 100 }, small: c.small ? { kind: 'text', text: c.small, size: 56, y: 36, x: 50, color: fg, outline: 0 } : null, title: { kind: 'text', text: c.title || '(그 단계의 주제 이름)', size: 120, y: c.small ? 52 : 50, x: 50, color: fg, outline: 0 } };
       })();
       const cardSum = !stepCard ? '' : stepCard.items ? '내 제목 화면 · 배경 ' + ((stepCard.items.find((q) => q.kind === 'bg') || {}).color || '없음') + ' · 글자 ' + stepCard.items.filter((q) => q.kind === 'text').length + '개' : '배경 ' + stepCard.bg.color + ' · 위쪽 글 ' + (stepCard.small ? '"' + stepCard.small.text.replace('{n}', '번호') + '"' : '없음') + ' · 제목 크기 ' + stepCard.title.size + ' · 글자색 ' + (cardFg(stepCard.bg.color) === '#ffffff' ? '흰색' : '검정') + ' · ' + stepCard.seconds + '초';
       const styleOfKey = (k, list, def) => { if (k === 'shorts') return SHORTSUB; if (k === 'def' || k === 'preset') return def; const v = { kind: def.kind, ...list[+k.slice(1)].v }; return v; };   // 내 스타일은 저장한 값 그대로 써요 (가로라고 자동으로 줄이지 않아요)
@@ -1985,7 +2016,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         pick('템플릿', [['none', '🚫 없음'], ...TPLS.map((t, i) => ['t' + i, t.n]), ...tpls.map((t, i) => ['m' + i, '⭐ ' + t.n])], tplKey, (k) => { opt.tpl = k; });
         pick('쇼츠 제목', [['none', '🚫 안 넣기'], ['preset', '2줄 (흰색 / 노랑)'], ...titles.map((t, i) => ['m' + i, '⭐ ' + t.n])], titleKey, (k) => { opt.title = k; });
       }
-      if (lecture) { pick('단계 화면', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]), ...cardsL.map((c, i) => ['m' + i, '⭐ ' + c.n])], cardKey, (k) => { opt.card = k; }); if (cardSum) Rt.append(E('div', 'apath', esc(cardSum))); }
+      if (lecture) { pick('템플릿', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]).filter((_, i) => ['STEP 번호 + 제목', '자료 받기'].includes(CARD_RECS[i].n))], cardKey, (k) => { opt.card = k; }); if (cardSum) Rt.append(E('div', 'apath', esc(cardSum))); }
       if (LAND) pick('세로 영상', [['rot90', '↻ 90° 돌려서 꽉 채우기'], ['rot270', '↺ 반대로 90°'], ['keep', '그대로 두기']], ['rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90', (k) => { opt.por = k; });
       pick('자막', [['def', '기본'], ...(ratio === '9:16' ? [['shorts', '쇼츠 자막']] : []), ...subs.map((t, i) => ['m' + i, '⭐ ' + t.n])], subKey, (k) => { opt.subBy[typeKey] = k; });
       if (!subs.length) Rt.append(E('div', 'apath', '기본 = 글꼴 Cafe24 쑥쑥 · 흰 글자 · 검정 테두리 ' + SUBDEF.outline + ' · 크기 ' + SUBDEF.size + ' · 가로 50% · 세로 ' + SUBDEF.y + '% · 편집기에서 "내 자막 스타일"을 저장하면 여기서 고를 수 있어요'));
