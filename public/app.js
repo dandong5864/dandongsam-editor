@@ -13,8 +13,8 @@ window.addEventListener('unhandledrejection', (e) => clientLog('화면 오류', 
 /* 버전 표시: 시작 화면과 편집 화면 왼쪽 위 이름 옆 */
 let appVer = null;
 function addVer(host) {
-  if (!host || host.querySelector('.ver')) return;
-  const put = (v) => { if (v && !host.querySelector('.ver')) host.append(E('span', 'ver', 'v' + esc(v))); };
+  // 버전은 화면 안이 아니라 맨 위 창 제목에 보여 줘요 (예: 단동샘 편집기 v1.0.3)
+  const put = (v) => { if (v) document.title = '단동샘 편집기 v' + v; };
   if (appVer) return put(appVer);
   fetch('/api/version').then((r) => r.json()).then((j) => { appVer = j && j.version; put(appVer); }).catch(() => {});
 }
