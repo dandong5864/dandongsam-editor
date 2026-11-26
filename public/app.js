@@ -321,6 +321,18 @@ function syncPip() {
   Object.keys(bgEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'bg')) { bgEls[id].remove(); delete bgEls[id]; } });
   Object.keys(pipEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'pip')) { pipEls[id].pause(); pipEls[id].remove(); delete pipEls[id]; } });
 }
+let ttlTxt = '', ttlSmall = null, ttlColor = '#1f6feb';
+function addTitleCard(title, small, color) {   // 강의 단계가 바뀔 때: 색 배경 + 가운데 제목(+위쪽 작은 글)
+  push(); layout();
+  const st = Math.round(S.t * 100) / 100, en = Math.round((st + 3.5) * 100) / 100, hx = color.replace('#', ''), lum = (parseInt(hx.slice(0, 2), 16) * 299 + parseInt(hx.slice(2, 4), 16) * 587 + parseInt(hx.slice(4, 6), 16) * 114) / 1000, fg = lum > 150 ? '#111111' : '#ffffff';
+  const sample = S.texts.find((t) => t.kind === 'text'), font = sample ? sample.font : ((S.fonts[0] && S.fonts[0].family) || 'sans-serif');
+  const mk = (text, size, y) => ({ id: nid(), kind: 'text', start: st, end: en, text, colors: [], color: fg, font, size, outline: 0, outlineColor: '#000000', x: 50, y });
+  const bg = { id: nid(), kind: 'bg', start: st, end: en, color, opacity: 100, lane: 0, card: true };
+  S.texts.push(bg); let sel = bg;
+  if (small) S.texts.push(mk(small, 56, 36));
+  if (title) { sel = mk(title, 120, small ? 52 : 50); S.texts.push(sel); }
+  S.sel = { type: 't', id: sel.id }; changed(true); if (ltab === 'tpl') buildLeft();
+}
 function addBg(color) {
   push(); layout(); const st = Math.round(S.t * 100) / 100, x = { id: nid(), kind: 'bg', start: st, end: Math.round((st + 3) * 100) / 100, color: color || '#1f6feb', opacity: 100, lane: 0 };
   S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(); renderProps(); if (ltab === 'tpl') buildLeft();
@@ -1054,6 +1066,18 @@ function renderProps() {
   renderPropsSel(p, s);
 }
 function bgControls(p) {
+  p.append(sec('제목 화면'));
+  const nxt = S.texts.filter((x) => x.kind === 'bg' && x.card).length + 1;
+  const mi = (ph, val, set) => { const i = E('input', 'ttl-in'); i.type = 'text'; i.placeholder = ph; i.value = val; i.maxLength = 40; i.onkeydown = (e) => e.stopPropagation(); i.oninput = () => set(i.value); return i; };
+  p.append(mi('제목 (예: 영상편집방법)', ttlTxt, (v) => { ttlTxt = v; }), mi('위쪽 작은 글 (예: STEP 1)', ttlSmall == null ? 'STEP ' + nxt : ttlSmall, (v) => { ttlSmall = v; }));
+  const tsw = E('div', 'bgsw'); ['#1f6feb', '#111111', '#ffffff', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b' + (c === ttlColor ? ' on' : ''), ''); b.style.background = c; b.title = c; b.onclick = () => { ttlColor = c; tsw.querySelectorAll('.bgsw-b').forEach((q) => q.classList.toggle('on', q === b)); }; tsw.append(b); }); p.append(tsw);
+  const tb = E('button', 'primary bigbtn', '＋ 제목 화면 추가'); tb.onclick = () => { addTitleCard(ttlTxt.trim(), ttlSmall == null ? 'STEP ' + nxt : ttlSmall.trim(), ttlColor); ttlSmall = null; }; p.append(tb);
+  p.append(sec('추천 제목 화면'));
+  const rec = E('div', 'tplcol');
+  [['STEP 번호 + 제목', '#1f6feb', () => 'STEP ' + nxt, ''], ['다음 강의 안내', '#111111', () => '다음 강의', ''], ['오늘 배울 내용', '#8e44ff', () => '오늘 배울 내용', ''], ['정리하기', '#00C48C', () => '정리', ''], ['마무리 인사', '#ff2d92', () => '', '감사합니다']].forEach(([n, col, sm, ti]) => {
+    const r = E('div', 'tplrow'), bt = E('button', 'tplpick', esc(n)); bt.onclick = () => { addTitleCard(ttlTxt.trim() || ti || '제목을 입력하세요', sm(), col); ttlSmall = null; }; r.append(bt); rec.append(r);
+  });
+  p.append(rec);
   p.append(sec('배경'));
   const sw = E('div', 'bgsw'); ['#1f6feb', '#ffffff', '#000000', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b'); b.style.background = c; b.title = c; b.onclick = () => addBg(c); sw.append(b); }); p.append(sw);
   const ab = E('button', 'primary bigbtn', '＋ 배경 추가'); ab.onclick = () => addBg(); p.append(ab);
