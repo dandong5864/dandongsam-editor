@@ -2072,7 +2072,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const ub = E('button', 'primary', '⬆ 업데이트'); ub.onclick = () => runUpdate(u); bar.append(ub); wrap.insertBefore(bar, wrap.children[1] || null); }).catch(() => {});
     // 시작하기
     const top = E('div', 'hm-top'); wrap.append(top);
-    const big = E('button', 'hm-new', '<b>＋</b><span>새 프로젝트 만들기</span>'); big.onclick = () => { hide(); $('#btn-new').onclick(); };
+    const big = E('button', 'hm-new', '<b>＋</b><span>새 동영상 만들기</span>'); big.onclick = () => { hide(); $('#btn-new').onclick(); };
     top.append(big);
     const side = E('div', 'hm-side'); top.append(side);
     if (S.clips.length) { const b = E('button', 'hm-btn cont', '↩ 이어서 편집하기'); b.onclick = hide; side.append(b); }
