@@ -1468,6 +1468,8 @@ function buildSubPane(d) {
     const bs = E('button', 'primary bigbtn', '🎙 목소리로 자막 자동 만들기'); bs.onclick = sttDialog; d.append(bs);
     const b1 = E('button', 'bigbtn', '＋ 자막 한 줄 추가 (재생 막대 위치)'); b1.onclick = () => addText('sub'); d.append(b1);
     if (S.texts.some((x) => x.kind === 'sub')) {
+      d.append(sec('자막 다시 나누기 (한 줄)'));
+      const rs = E('div', 'chips shiftrow'); [['fast', '⚡ 빠른 자막'], ['slow', '🐢 느린 자막']].forEach(([k, l]) => { const bb = E('button', 'chip', l); bb.title = SPLIT_TIP[k]; bb.onclick = () => resplitSubs(k); rs.append(bb); }); d.append(rs);
       d.append(sec('자막 시간 한꺼번에 맞추기'));
       const shiftAll = (dt) => { push(); S.texts.filter((x) => x.kind === 'sub').forEach((x) => { const l = x.end - x.start; x.start = Math.max(0, Math.round((x.start + dt) * 100) / 100); x.end = Math.round((x.start + l) * 100) / 100; }); changed(true); toast(`자막을 ${dt > 0 ? '늦췄어요' : '당겼어요'} (${dt > 0 ? '+' : ''}${dt}초)`); };
       const sr = E('div', 'chips shiftrow'); [[-0.5, '−0.5'], [-0.1, '−0.1'], [0.1, '+0.1'], [0.5, '+0.5']].forEach(([dt, l]) => { const bb = E('button', 'chip', l + '초'); bb.onclick = () => shiftAll(dt); sr.append(bb); }); d.append(sr);
@@ -2104,7 +2106,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const settings = { 설명: '단동샘 편집기가 만든 편집 설정입니다. 편집파일_만드는법.txt 의 [편집설정.json] 설명대로 따라 주세요.', canvas: ratio,
         tpl: ratio === '9:16' ? (tplKey === 'none' ? null : { ...(tplKey[0] === 't' ? TPLS[+tplKey.slice(1)].v : tpls[+tplKey.slice(1)].v) }) : null,
         title: ratio === '9:16' && titleKey !== 'none' ? styleOfKey(titleKey, titles, TITLEDEF) : null,
-        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), lecture, stepCard };
+        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: ['fast', 'slow'].includes(opt.split) ? opt.split : null, lecture, stepCard };
       post('/api/auto/settings', { path: sel.path, settings });
       const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); Rt.append(w); };
       if (ratio === '9:16') {
@@ -2114,11 +2116,13 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       if (lecture) { pick('템플릿', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]).filter((_, i) => ['STEP 번호 + 제목', '자료 받기'].includes(CARD_RECS[i].n))], cardKey, (k) => { opt.card = k; }); if (cardSum) Rt.append(E('div', 'apath', esc(cardSum))); }
       if (LAND) pick('세로 영상', [['rot90', '↻ 90° 돌려서 꽉 채우기'], ['rot270', '↺ 반대로 90°'], ['keep', '그대로 두기']], ['rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90', (k) => { opt.por = k; });
       pick('자막', [['def', '기본'], ...(ratio === '9:16' ? [['shorts', '쇼츠 자막']] : []), ...subs.map((t, i) => ['m' + i, '⭐ ' + t.n])], subKey, (k) => { opt.subBy[typeKey] = k; });
+      pick('자막 나누기', SPLIT_MODES, ['fast', 'slow'].includes(opt.split) ? opt.split : 'def', (k) => { opt.split = k; });
       if (!subs.length) Rt.append(E('div', 'apath', '기본 = 글꼴 Cafe24 쑥쑥 · 흰 글자 · 검정 테두리 ' + SUBDEF.outline + ' · 크기 ' + SUBDEF.size + ' · 가로 50% · 세로 ' + SUBDEF.y + '% · 편집기에서 "내 자막 스타일"을 저장하면 여기서 고를 수 있어요'));
       const P = sel.path, R = P + info.sep + '결과', rt = ratio === '9:16' ? '9:16 세로 (쇼츠)' : '16:9 가로 (유튜브)', cv = ratio;
       const por = settings.portrait === 'keep' ? '세로로 찍은 영상은 돌리지 말고 그대로 둬.' : '세로로 찍은 영상(화면이 세로인 영상)은 가로 화면에 꽉 차도록 클립의 rot 를 ' + (settings.portrait === 'rot270' ? '270' : '90') + ' 으로 하고 fit 은 contain 으로 해 줘(자르거나 흐린 배경으로 채우지 마).';
       const tail0 = `영상 모양은 ${rt}야. .dsp 의 "canvas" 값은 "${cv}"로 해 줘. ${ratio === '9:16' ? '폴더 안의 "편집설정.json"에 적힌 템플릿·제목·자막 스타일을 그대로 .dsp 에 써 줘.' + (settings.title ? ' 쇼츠 제목은 영상 내용에 맞게 2줄로 지어 줘.' : '') : '가로 영상이라 제목 글자와 색 띠 템플릿은 넣지 마(.dsp 의 "tpl" 은 null, 제목 글자 항목은 만들지 마). 컷 편집(말 없는 구간·군말·반복 잘라내기)을 한 뒤 하단 자막만 넣고, 자막 스타일은 폴더 안 "편집설정.json"의 subtitle 값을 그대로 써 줘(가로 롱폼 크기라 쇼츠보다 작아). ' + por} 원본 영상은 이름도 내용도 바꾸지 말고 그대로 연결해 줘(비율 보정용 복사본은 만들지 마. 편집기가 알아서 맞춰). 내레이션이 있으면 영상 조각은 소리를 끄고 내레이션은 따로 audio 로 넣어 줘. 중간에 승인을 묻지 말고 끝까지 만들어 줘. 음성 인식이 안 되면 자막을 지어내지 말고 못 만들었다고 알려 줘.` + (lecture ? ' 이 영상은 시청자가 화면을 보며 따라 하는 강의(실습) 영상이야. "하단 자막만"은 제목 글자와 색 띠를 빼라는 뜻일 뿐, 화면 강조를 빼라는 뜻이 아니야. 버튼·메뉴·입력칸을 눌러야 하는 말이 나오는 순간에는 그 위치에 화살표나 네모 테두리를 넣고 누르는 순간에는 클릭 표시를 넣어 줘. 단계가 끝나거나 결과를 확인하는 순간에는 체크 표시를 넣고, 하면 안 되는 것은 ✖ 표시를 넣어 줘. 글씨가 작거나 좁은 영역을 보여 줄 때는 부드러운 확대를 넣어 줘. 예시 이미지나 비교 자료가 있으면 그 말을 하는 타이밍에 띄우고, 여러 곳을 한꺼번에 강조하지 말고 한 번에 한 곳씩 2~4초만 보여 줘. 자막과 중요한 글씨를 가리지 않게 해 줘. 위치를 확신할 수 없는 곳에는 넣지 마. 토큰을 아끼려고 화면 이미지는 "누르세요·클릭·선택·열어"처럼 위치가 필요한 말이 나온 시각에서만 가로 640px 이하로 줄여 보고(여러 장은 한 장에 모아서), 영상 한 편에 전체 20장을 넘기지 마. 확대와 체크는 이미지 없이 말의 타이밍만으로 넣어도 돼. 도형과 확대 만드는 법은 "편집파일_만드는법.txt"의 "강의·화면 녹화용 효과"에 있어. 끝나면 어떤 시각에 어떤 강조를 몇 개 넣었는지 알려 줘.' : '');
-      const tail = tail0 + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
+      const SPLIT_RULE = { fast: ' 자막은 "빠른 자막"으로 나눠 줘: 무조건 한 줄, 조사·어미 뒤에서 바로 끊어 1~2어절씩(공백 포함 8자 이내), 한 컷이 0.5~1초가 되게 톡톡 끊어 줘. 꾸미는 말과 조사 없는 말(예: "아침", "물 한")은 뒤 말과 붙여 줘. 예) 아침 공복에 / 따뜻한 / 물 한 잔을 / 마시면 / 혈액순환이 / 활발해지고 / 하루가 / 정말 / 가뿐해집니다. 자막 항목마다 "one": true 를 넣어 줘.', slow: ' 자막은 "느린 자막"으로 나눠 줘: 무조건 한 줄, 연결어미·종결어미에서 끊어 뜻이 끝나는 구나 짧은 절 단위로(공백 포함 8~13자, 뜻이 찢어지지 않게 최대 14자까지), 한 컷이 2초 이상 보이게 해 줘. 너무 길면 조사 뒤에서 나누고, 꾸미는 말(예: "따뜻한") 뒤에서는 끊지 마. 예) 아침 공복에 / 따뜻한 물 한 잔을 마시면 / 혈액순환이 활발해지고 / 하루가 정말 가뿐해집니다. 자막 항목마다 "one": true 를 넣어 줘.' };
+      const tail = tail0 + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
         codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
         gpt: { name: 'ChatGPT', how: '채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json"을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.', prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. ${tail}` },
@@ -2297,6 +2301,27 @@ function splitCaption(text, maxc) {
   words.forEach((w) => { if (cur && (cur + ' ' + w).length > maxc) { out.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w; });
   if (cur) out.push(cur); return out;
 }
+/* ⚡ 빠른 자막 / 🐢 느린 자막: 나누는 규칙은 subsplit.js */
+const SPLIT_MODES = [['def', '기본'], ['fast', '⚡ 빠른 자막'], ['slow', '🐢 느린 자막']];
+const SPLIT_TIP = { fast: '1~2어절 · 8자 이내 · 0.5~1초씩 톡톡 (젊은 층)', slow: '뜻이 끝나는 곳에서 · 8~13자 · 2초 이상 (어르신)' };
+const splitMode = () => { try { const v = localStorage.getItem('vtk.subsplit'); return ['fast', 'slow'].includes(v) ? v : 'def'; } catch (e) { return 'def'; } };
+const setSplitMode = (v) => { try { localStorage.setItem('vtk.subsplit', v); } catch (e) {} };
+function putSplitSubs(list, mode, base) {   // 나눈 결과를 자막으로 넣어요. 무조건 한 줄: 가장 긴 줄이 화면 폭에 들어가게 글자 크기를 한꺼번에 맞춰요
+  base = base || S.texts.find((t) => t.kind === 'sub') || {};
+  const font = base.font || (S.fonts[0] && S.fonts[0].family) || 'sans-serif', outline = base.outline === undefined ? 8 : base.outline; let size = base.size || 86;
+  const cx = document.createElement('canvas').getContext('2d'); cx.font = `${size}px "${font}", sans-serif`;
+  const wMax = list.reduce((a, q) => Math.max(a, cx.measureText(q.text).width), 0) + outline * 2, room = 1080 * 0.92;
+  if (wMax > room) size = Math.max(30, Math.floor(size * room / wMax));
+  const keep = {}; ['box', 'boxColor', 'boxOpacity', 'boxRadius', 'colors'].forEach((k) => { if (base[k] !== undefined) keep[k] = base[k]; });
+  list.forEach((q, i) => { const nx = list[i + 1]; let st = +q.start || 0, en = +q.end || st + (mode === 'slow' ? 2 : 0.7); if (nx && en > nx.start) en = nx.start;
+    S.texts.push({ ...keep, colors: [], id: nid(), kind: 'sub', one: true, split: mode, start: +st.toFixed(2), end: +Math.max(st + 0.2, en).toFixed(2), text: q.text, color: base.color || '#ffffff', font, size, outline, outlineColor: base.outlineColor || '#000000', x: base.x === undefined ? 50 : base.x, y: base.y || 81 }); });
+  return list.length;
+}
+function resplitSubs(mode) {   // 이미 있는 자막을 빠른/느린 자막으로 다시 나눠요 (시간은 원래 자막 시간 안에서 글자 수 비율로)
+  const old = S.texts.filter((x) => x.kind === 'sub').sort((a, b) => a.start - b.start); if (!old.length) return toast('먼저 자막을 만들어 주세요');
+  push(); const base = { ...old[0] }; S.texts = S.texts.filter((x) => x.kind !== 'sub');
+  const n = putSplitSubs(subSplit(subSplit.fromSubs(old), mode), mode, base); changed(true); renderProps(); toast(`${mode === 'fast' ? '⚡ 빠른' : '🐢 느린'} 자막 ${n}개로 다시 나눴어요`);
+}
 async function sttDialog() {
   if (!S.clips.length) return toast('먼저 영상을 타임라인에 넣어 주세요');
   const api = (u, b) => fetch(u, b === undefined ? {} : { method: 'POST', body: JSON.stringify(b) }).then((r) => r.json()).catch(() => ({ error: '서버에 연결할 수 없어요' }));
@@ -2304,19 +2329,23 @@ async function sttDialog() {
   const info = E('div', 'ahow', '영상 속 말소리를 내 컴퓨터가 글로 바꿔요. 인터넷으로 영상이 나가지 않아요.');
   const bar = E('div', 'sttbar', '<i></i>'), msg = E('div', 'sttmsg', ''), opt = E('label', 'sttopt'), act = E('div', 'acts');
   const cb = E('input'); cb.type = 'checkbox'; cb.checked = S.texts.some((x) => x.kind === 'sub'); opt.append(cb, ' 만들기 전에 지금 자막을 모두 지우기');
+  const modeRow = E('div', 'arow ap'); modeRow.append(E('span', 'alab', '자막 나누기'));
+  const modeChips = E('div', 'chips seg'); SPLIT_MODES.forEach(([k, l]) => { const b = E('button', 'chip' + (splitMode() === k ? ' on' : ''), l); b.title = SPLIT_TIP[k] || '한 줄에 16자 안팎으로 묶어요'; b.onclick = () => { setSplitMode(k); [...modeChips.children].forEach((q) => q.classList.toggle('on', q === b)); }; modeChips.append(b); }); modeRow.append(modeChips);
   const go = E('button', 'primary bigbtn', '🎙 자막 만들기'), dl = E('button', 'primary bigbtn', '⬇ 음성 인식 모델 내려받기 (약 570MB · 한 번만)'), stop = E('button', 'bigbtn', '⏹ 멈추기'), close = E('button', '', '닫기');
   close.onclick = () => { alive = false; closeModal(); };
-  act.append(close); d.append(info, opt, dl, go, stop, bar, msg, act); openModal(d);
+  act.append(close); d.append(info, modeRow, opt, dl, go, stop, bar, msg, act); openModal(d);
   let alive = true; const prog = (p) => { bar.firstChild.style.width = p + '%'; };
   const finish = (raw) => {
     // 단어 단위로 받았으면 실제 말한 시간에 맞춰 문장으로 묶어요 (아니면 문장 단위 그대로)
-    let segs = raw; const avg = raw.reduce((a, q) => a + q.text.length, 0) / Math.max(1, raw.length);
+    let segs = raw; const avg = raw.reduce((a, q) => a + q.text.length, 0) / Math.max(1, raw.length), mode = splitMode();
     if (raw.length > 3 && avg <= 7) {
       const words = []; raw.forEach((q) => { if (q.sp || !words.length) words.push({ text: q.text, start: q.start, end: q.end }); else { const w = words[words.length - 1]; w.text += q.text; w.end = q.end; } });
+      if (mode !== 'def') { push(); if (cb.checked) S.texts = S.texts.filter((x) => x.kind !== 'sub'); const n = putSplitSubs(subSplit(words, mode), mode); changed(true); closeModal(); alive = false; toast(`${mode === 'fast' ? '⚡ 빠른' : '🐢 느린'} 자막 ${n}개를 만들었어요. 틀린 글자는 목록에서 고쳐 주세요`, null, 7000); if (rtab === 'sub') renderProps(); return; }
       segs = []; let cur = null;
       words.forEach((w) => { if (cur && ((cur.text + ' ' + w.text).length > 16 || w.start - cur.end > 0.7 || /[.?!。]$/.test(cur.text))) { segs.push(cur); cur = null; } if (!cur) cur = { text: w.text, start: w.start, end: w.end }; else { cur.text += ' ' + w.text; cur.end = w.end; } });
       if (cur) segs.push(cur); segs.direct = true;
     }
+    if (mode !== 'def' && !segs.direct) { push(); if (cb.checked) S.texts = S.texts.filter((x) => x.kind !== 'sub'); const n = putSplitSubs(subSplit(subSplit.fromSubs(segs), mode), mode); changed(true); closeModal(); alive = false; toast(`자막 ${n}개를 만들었어요. 틀린 글자는 목록에서 고쳐 주세요`, null, 7000); if (rtab === 'sub') renderProps(); return; }
     segs.forEach((q, i) => { const nx = segs[i + 1]; q.end = Math.min(q.end + 0.15, nx ? nx.start : q.end + 0.15); });
     push(); layout(); if (cb.checked) S.texts = S.texts.filter((x) => x.kind !== 'sub');
     const base = S.texts.find((t) => t.kind === 'sub') || {}; let n = 0;
