@@ -562,3 +562,5 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .stkkey .stk-names{grid-template-columns:1fr!important}.stkkey .stk-name{height:40px;font-size:14px;padding:0 10px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .stkkey{flex-direction:column!important;gap:8px!important}.stksub{flex-direction:row!important;width:auto!important;gap:6px!important}.stksb{flex:1;padding:10px 6px!important}.stksubbody{width:100%}
+
+.stkkey .stk-names{grid-template-columns:repeat(2,1fr)!important}.stkkey .stk-name{height:46px;font-size:13px;line-height:1.25;padding:0 8px;text-align:center;white-space:normal;display:flex;align-items:center;justify-content:center;overflow:hidden}
