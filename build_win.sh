@@ -19,6 +19,7 @@ cp -r "$SRC/node_modules/@fugood/whisper.node/lib" "$SRC/node_modules/@fugood/wh
 cp /tmp/wpk/package/index.node /tmp/wpk/package/package.json "$D/node_modules/@fugood/node-whisper-win32-x64/"
 cp "$SRC/사용법 링크.txt" "$D/"
 cp /tmp/launcher/launcher.exe "$D/단동샘 편집기.exe"
+mkdir -p "$D/스티커"; cp "$SRC/기본스티커/"*.png "$D/스티커/";
 mkdir -p "$D/효과음/기본 효과음"; cp /tmp/synth/out/*.mp3 "$D/효과음/기본 효과음/"
 if [ "$MODE" = full ]; then
   cp -r "$SRC/samples" "$D/samples"; cp "$SRC/효과음/"* "$D/효과음/"
