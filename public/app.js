@@ -322,6 +322,8 @@ function syncPip() {
   Object.keys(pipEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'pip')) { pipEls[id].pause(); pipEls[id].remove(); delete pipEls[id]; } });
 }
 let ttlTxt = '', ttlSmall = null, ttlColor = '#1f6feb';
+const CARD_RECS = [{ n: 'STEP 번호 + 제목', col: '#1f6feb', small: 'STEP {n}', title: '' }, { n: '다음 강의 안내', col: '#111111', small: '다음 강의', title: '' }, { n: '오늘 배울 내용', col: '#8e44ff', small: '오늘 배울 내용', title: '' }, { n: '정리하기', col: '#00C48C', small: '정리', title: '' }, { n: '마무리 인사', col: '#ff2d92', small: '', title: '감사합니다' }];
+const cardFg = (c) => { const h = c.replace('#', ''), l = (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 1000; return l > 150 ? '#111111' : '#ffffff'; };
 function addTitleCard(title, small, color) {   // 강의 단계가 바뀔 때: 색 배경 + 가운데 제목(+위쪽 작은 글)
   push(); layout();
   const st = Math.round(S.t * 100) / 100, en = Math.round((st + 3.5) * 100) / 100, hx = color.replace('#', ''), lum = (parseInt(hx.slice(0, 2), 16) * 299 + parseInt(hx.slice(2, 4), 16) * 587 + parseInt(hx.slice(4, 6), 16) * 114) / 1000, fg = lum > 150 ? '#111111' : '#ffffff';
@@ -1090,7 +1092,7 @@ function bgControls(p) {
   const tb = E('button', 'primary bigbtn', '＋ 제목 화면 추가'); tb.onclick = () => { addTitleCard(ttlTxt.trim(), ttlSmall == null ? 'STEP ' + nxt : ttlSmall.trim(), ttlColor); ttlSmall = null; }; p.append(tb);
   p.append(sec('추천 제목 화면'));
   const rec = E('div', 'tplcol');
-  [['STEP 번호 + 제목', '#1f6feb', () => 'STEP ' + nxt, ''], ['다음 강의 안내', '#111111', () => '다음 강의', ''], ['오늘 배울 내용', '#8e44ff', () => '오늘 배울 내용', ''], ['정리하기', '#00C48C', () => '정리', ''], ['마무리 인사', '#ff2d92', () => '', '감사합니다']].forEach(([n, col, sm, ti]) => {
+  CARD_RECS.map((c) => [c.n, c.col, () => c.small.replace('{n}', nxt), c.title]).forEach(([n, col, sm, ti]) => {
     const r = E('div', 'tplrow'), bt = E('button', 'tplpick', esc(n)); bt.onclick = () => { addTitleCard(ttlTxt.trim() || ti || '제목을 입력하세요', sm(), col); ttlSmall = null; }; r.append(bt); rec.append(r);
   });
   p.append(rec);
@@ -1949,23 +1951,33 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const subKey = stored !== undefined && (stored === 'def' || (stored === 'shorts' && ratio === '9:16') || subs[+String(stored).slice(1)]) ? stored : (byName >= 0 && (lecture || ratio !== '9:16' || String(subs[byName].n).includes('숏폼')) ? 'm' + byName : (ratio === '9:16' ? 'shorts' : (subs.length ? 'm' + (subs.length - 1) : 'def')));
       const titleKey = opt.title !== undefined && (['none', 'preset'].includes(opt.title) || titles[+opt.title.slice(1)]) ? opt.title : 'preset';
       const tplKey = opt.tpl !== undefined && (opt.tpl === 'none' || TPLS[+opt.tpl.slice(1)] || tpls[+opt.tpl.slice(1)]) ? opt.tpl : 't0';
+      const cardsL = myCards(), cardKey = opt.card !== undefined && (opt.card === 'none' || (opt.card[0] === 'r' && CARD_RECS[+opt.card.slice(1)]) || (opt.card[0] === 'm' && cardsL[+opt.card.slice(1)])) ? opt.card : 'none';
+      const stepCard = (() => {   // 강의 영상: 단계가 바뀔 때 넣을 제목 화면 설정
+        if (!lecture || cardKey === 'none') return null;
+        if (cardKey[0] === 'm') { const c = cardsL[+cardKey.slice(1)]; return { name: c.n, items: c.items }; }
+        const c = CARD_RECS[+cardKey.slice(1)], fg = cardFg(c.col);
+        return { name: c.n, seconds: 3.5, bg: { kind: 'bg', color: c.col, opacity: 100 }, small: c.small ? { kind: 'text', text: c.small, size: 56, y: 36, x: 50, color: fg, outline: 0 } : null, title: { kind: 'text', text: c.title || '(그 단계의 주제 이름)', size: 120, y: c.small ? 52 : 50, x: 50, color: fg, outline: 0 } };
+      })();
+      const cardSum = !stepCard ? '' : stepCard.items ? '내 제목 화면 · 배경 ' + ((stepCard.items.find((q) => q.kind === 'bg') || {}).color || '없음') + ' · 글자 ' + stepCard.items.filter((q) => q.kind === 'text').length + '개' : '배경 ' + stepCard.bg.color + ' · 위쪽 글 ' + (stepCard.small ? '"' + stepCard.small.text.replace('{n}', '번호') + '"' : '없음') + ' · 제목 크기 ' + stepCard.title.size + ' · 글자색 ' + (cardFg(stepCard.bg.color) === '#ffffff' ? '흰색' : '검정') + ' · ' + stepCard.seconds + '초';
       const styleOfKey = (k, list, def) => { if (k === 'shorts') return SHORTSUB; if (k === 'def' || k === 'preset') return def; const v = { kind: def.kind, ...list[+k.slice(1)].v }; return v; };   // 내 스타일은 저장한 값 그대로 써요 (가로라고 자동으로 줄이지 않아요)
       const settings = { 설명: '단동샘 편집기가 만든 편집 설정입니다. 프로젝트파일_만드는법.txt 의 [편집설정.json] 설명대로 따라 주세요.', canvas: ratio,
         tpl: ratio === '9:16' ? (tplKey === 'none' ? null : { ...(tplKey[0] === 't' ? TPLS[+tplKey.slice(1)].v : tpls[+tplKey.slice(1)].v) }) : null,
         title: ratio === '9:16' && titleKey !== 'none' ? styleOfKey(titleKey, titles, TITLEDEF) : null,
-        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), lecture };
+        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), lecture, stepCard };
       post('/api/auto/settings', { path: sel.path, settings });
       const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); Rt.append(w); };
       if (ratio === '9:16') {
         pick('템플릿', [['none', '🚫 없음'], ...TPLS.map((t, i) => ['t' + i, t.n]), ...tpls.map((t, i) => ['m' + i, '⭐ ' + t.n])], tplKey, (k) => { opt.tpl = k; });
         pick('쇼츠 제목', [['none', '🚫 안 넣기'], ['preset', '2줄 (흰색 / 노랑)'], ...titles.map((t, i) => ['m' + i, '⭐ ' + t.n])], titleKey, (k) => { opt.title = k; });
       }
+      if (lecture) { pick('단계 화면', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]), ...cardsL.map((c, i) => ['m' + i, '⭐ ' + c.n])], cardKey, (k) => { opt.card = k; }); if (cardSum) Rt.append(E('div', 'apath', esc(cardSum))); }
       if (LAND) pick('세로 영상', [['rot90', '↻ 90° 돌려서 꽉 채우기'], ['rot270', '↺ 반대로 90°'], ['keep', '그대로 두기']], ['rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90', (k) => { opt.por = k; });
       pick('자막', [['def', '기본'], ...(ratio === '9:16' ? [['shorts', '쇼츠 자막']] : []), ...subs.map((t, i) => ['m' + i, '⭐ ' + t.n])], subKey, (k) => { opt.subBy[typeKey] = k; });
       if (!subs.length) Rt.append(E('div', 'apath', '기본 = 글꼴 Cafe24 쑥쑥 · 흰 글자 · 검정 테두리 ' + SUBDEF.outline + ' · 크기 ' + SUBDEF.size + ' · 가로 50% · 세로 ' + SUBDEF.y + '% · 편집기에서 "내 자막 스타일"을 저장하면 여기서 고를 수 있어요'));
       const P = sel.path, R = P + info.sep + '결과', rt = ratio === '9:16' ? '9:16 세로 (쇼츠)' : '16:9 가로 (유튜브)', cv = ratio;
       const por = settings.portrait === 'keep' ? '세로로 찍은 영상은 돌리지 말고 그대로 둬.' : '세로로 찍은 영상(화면이 세로인 영상)은 가로 화면에 꽉 차도록 클립의 rot 를 ' + (settings.portrait === 'rot270' ? '270' : '90') + ' 으로 하고 fit 은 contain 으로 해 줘(자르거나 흐린 배경으로 채우지 마).';
-      const tail = `영상 모양은 ${rt}야. .dsp 의 "canvas" 값은 "${cv}"로 해 줘. ${ratio === '9:16' ? '폴더 안의 "편집설정.json"에 적힌 템플릿·제목·자막 스타일을 그대로 .dsp 에 써 줘.' + (settings.title ? ' 쇼츠 제목은 영상 내용에 맞게 2줄로 지어 줘.' : '') : '가로 영상이라 제목 글자와 색 띠 템플릿은 넣지 마(.dsp 의 "tpl" 은 null, 제목 글자 항목은 만들지 마). 컷 편집(말 없는 구간·군말·반복 잘라내기)을 한 뒤 하단 자막만 넣고, 자막 스타일은 폴더 안 "편집설정.json"의 subtitle 값을 그대로 써 줘(가로 롱폼 크기라 쇼츠보다 작아). ' + por} 원본 영상은 이름도 내용도 바꾸지 말고 그대로 연결해 줘(비율 보정용 복사본은 만들지 마. 편집기가 알아서 맞춰). 내레이션이 있으면 영상 조각은 소리를 끄고 내레이션은 따로 audio 로 넣어 줘. 중간에 승인을 묻지 말고 끝까지 만들어 줘. 음성 인식이 안 되면 자막을 지어내지 말고 못 만들었다고 알려 줘.` + (lecture ? ' 이 영상은 시청자가 화면을 보며 따라 하는 강의(실습) 영상이야. "하단 자막만"은 제목 글자와 색 띠를 빼라는 뜻일 뿐, 화면 강조를 빼라는 뜻이 아니야. 버튼·메뉴·입력칸을 눌러야 하는 말이 나오는 순간에는 그 위치에 화살표나 네모 테두리를 넣고 누르는 순간에는 클릭 표시를 넣어 줘. 단계가 끝나거나 결과를 확인하는 순간에는 체크 표시를 넣고, 하면 안 되는 것은 ✖ 표시를 넣어 줘. 글씨가 작거나 좁은 영역을 보여 줄 때는 부드러운 확대를 넣어 줘. 예시 이미지나 비교 자료가 있으면 그 말을 하는 타이밍에 띄우고, 여러 곳을 한꺼번에 강조하지 말고 한 번에 한 곳씩 2~4초만 보여 줘. 자막과 중요한 글씨를 가리지 않게 해 줘. 위치를 확신할 수 없는 곳에는 넣지 마. 토큰을 아끼려고 화면 이미지는 "누르세요·클릭·선택·열어"처럼 위치가 필요한 말이 나온 시각에서만 가로 640px 이하로 줄여 보고(여러 장은 한 장에 모아서), 영상 한 편에 전체 20장을 넘기지 마. 확대와 체크는 이미지 없이 말의 타이밍만으로 넣어도 돼. 도형과 확대 만드는 법은 "프로젝트파일_만드는법.txt"의 "강의·화면 녹화용 효과"에 있어. 끝나면 어떤 시각에 어떤 강조를 몇 개 넣었는지 알려 줘.' : '');
+      const tail0 = `영상 모양은 ${rt}야. .dsp 의 "canvas" 값은 "${cv}"로 해 줘. ${ratio === '9:16' ? '폴더 안의 "편집설정.json"에 적힌 템플릿·제목·자막 스타일을 그대로 .dsp 에 써 줘.' + (settings.title ? ' 쇼츠 제목은 영상 내용에 맞게 2줄로 지어 줘.' : '') : '가로 영상이라 제목 글자와 색 띠 템플릿은 넣지 마(.dsp 의 "tpl" 은 null, 제목 글자 항목은 만들지 마). 컷 편집(말 없는 구간·군말·반복 잘라내기)을 한 뒤 하단 자막만 넣고, 자막 스타일은 폴더 안 "편집설정.json"의 subtitle 값을 그대로 써 줘(가로 롱폼 크기라 쇼츠보다 작아). ' + por} 원본 영상은 이름도 내용도 바꾸지 말고 그대로 연결해 줘(비율 보정용 복사본은 만들지 마. 편집기가 알아서 맞춰). 내레이션이 있으면 영상 조각은 소리를 끄고 내레이션은 따로 audio 로 넣어 줘. 중간에 승인을 묻지 말고 끝까지 만들어 줘. 음성 인식이 안 되면 자막을 지어내지 말고 못 만들었다고 알려 줘.` + (lecture ? ' 이 영상은 시청자가 화면을 보며 따라 하는 강의(실습) 영상이야. "하단 자막만"은 제목 글자와 색 띠를 빼라는 뜻일 뿐, 화면 강조를 빼라는 뜻이 아니야. 버튼·메뉴·입력칸을 눌러야 하는 말이 나오는 순간에는 그 위치에 화살표나 네모 테두리를 넣고 누르는 순간에는 클릭 표시를 넣어 줘. 단계가 끝나거나 결과를 확인하는 순간에는 체크 표시를 넣고, 하면 안 되는 것은 ✖ 표시를 넣어 줘. 글씨가 작거나 좁은 영역을 보여 줄 때는 부드러운 확대를 넣어 줘. 예시 이미지나 비교 자료가 있으면 그 말을 하는 타이밍에 띄우고, 여러 곳을 한꺼번에 강조하지 말고 한 번에 한 곳씩 2~4초만 보여 줘. 자막과 중요한 글씨를 가리지 않게 해 줘. 위치를 확신할 수 없는 곳에는 넣지 마. 토큰을 아끼려고 화면 이미지는 "누르세요·클릭·선택·열어"처럼 위치가 필요한 말이 나온 시각에서만 가로 640px 이하로 줄여 보고(여러 장은 한 장에 모아서), 영상 한 편에 전체 20장을 넘기지 마. 확대와 체크는 이미지 없이 말의 타이밍만으로 넣어도 돼. 도형과 확대 만드는 법은 "프로젝트파일_만드는법.txt"의 "강의·화면 녹화용 효과"에 있어. 끝나면 어떤 시각에 어떤 강조를 몇 개 넣었는지 알려 줘.' : '');
+      const tail = tail0 + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
         codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 먼저 "프로젝트파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 프로젝트 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
         gpt: { name: 'ChatGPT', how: '채팅에 영상 파일과 폴더 안의 "프로젝트파일_만드는법.txt", "편집설정.json"을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.', prompt: `첨부한 영상을 편집해 줘. 첨부한 "프로젝트파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 프로젝트 파일(.dsp)을 만들어서 파일로 줘. ${tail}` },
