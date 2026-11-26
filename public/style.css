@@ -597,3 +597,4 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .hm-rank{position:absolute;top:8px;left:8px;z-index:2;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:800;background:#3a3a46;color:#fff}
 .hm-rank.r1{background:#ffd43b;color:#1a1500}.hm-rank.r2{background:#d0d4dc;color:#15171c}.hm-rank.r3{background:#e0915a;color:#1d0f05}
 #home .hm-h .hm-link+.hm-link{margin-left:-4px}
+.hm-sub{margin:-8px 0 14px;color:#c9a8ff;font-size:14px;font-weight:700}
