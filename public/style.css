@@ -294,6 +294,7 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 
 #home{position:fixed;inset:0;z-index:60;background:#121216;overflow:auto}
 .hm-wrap{max-width:1040px;margin:0 auto;padding:28px 28px 60px}
+.brand .ver,.hm-brand .ver{font-size:12px;font-weight:600;color:var(--dim);align-self:flex-end;margin-bottom:2px}
 .hm-brand{font-size:22px;font-weight:800;margin-bottom:22px;display:flex;align-items:center;gap:10px}
 .hm-top{display:grid;grid-template-columns:2fr 1fr;gap:16px}
 .hm-new{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:190px;border-radius:20px;background:linear-gradient(135deg,#25d6c4,#18a898);color:#04201c;border:0;cursor:pointer}

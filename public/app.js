@@ -5,6 +5,14 @@ const $ = (s, r = document) => r.querySelector(s);
 const E = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/* 버전 표시: 시작 화면과 편집 화면 왼쪽 위 이름 옆 */
+let appVer = null;
+function addVer(host) {
+  if (!host || host.querySelector('.ver')) return;
+  const put = (v) => { if (v && !host.querySelector('.ver')) host.append(E('span', 'ver', 'v' + esc(v))); };
+  if (appVer) return put(appVer);
+  fetch('/api/version').then((r) => r.json()).then((j) => { appVer = j && j.version; put(appVer); }).catch(() => {});
+}
 const fmt = (t, f = 1) => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = t - m * 60; return String(m).padStart(2, '0') + ':' + s.toFixed(f).padStart(f ? 3 + f : 2, '0'); };
 const parseTime = (s) => { s = String(s).trim().replace(',', '.'); if (!s) return NaN; const p = s.split(':').map(Number); if (p.some(isNaN)) return NaN; return p.reduce((a, b) => a * 60 + b, 0); };
 let uid = 0; const nid = () => 'k' + Date.now().toString(36) + (++uid);
@@ -2111,6 +2119,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     hide(); el = E('div'); el.id = 'home';
     const wrap = E('div', 'hm-wrap'); el.append(wrap);
     wrap.append(E('div', 'hm-brand', '<span class="logo">▶</span> 단동샘 편집기'));
+    addVer(wrap.lastChild);
     // 새 버전 알림 (인터넷이 안 되면 아무것도 안 보여요)
     fetch('/api/update/check').then((r) => r.json()).then((u) => { if (!u || !u.newer || !el) return; const bar = E('div', 'hm-upd'); bar.append(E('span', '', '🔔 새 버전 <b>v' + esc(u.latest) + '</b>이 나왔어요'));
       const ub = E('button', 'primary', '⬆ 업데이트'); ub.onclick = () => runUpdate(u); bar.append(ub); wrap.insertBefore(bar, wrap.children[1] || null); }).catch(() => {});
@@ -2571,5 +2580,5 @@ function renderShapeProps(p, x) {
   const mvEnd = () => { showGuides(); if (!mv) return; const d = mv; mv = null; busy = false; if (d.pushed) changed(true); };
   stage.addEventListener('pointerup', mvEnd); stage.addEventListener('pointercancel', mvEnd);
 })();
+addVer(document.querySelector('.brand'));
 })();
-

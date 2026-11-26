@@ -1138,6 +1138,7 @@ const server = http.createServer(async (req, res) => {
       try { return json(res, 200, { list: await cachedFeed('bl' + bu, () => blogFeed(bu)) }); } catch (e) { return json(res, 200, { list: [], error: '블로그 글을 불러오지 못했어요' }); }
     }
     // ---- 새 버전 알림 · 자동 업데이트 (GitHub 릴리스) ----
+    if (req.method === 'GET' && p === '/api/version') return json(res, 200, { version: APP_VER });
     if (req.method === 'GET' && p === '/api/update/check') { try { return json(res, 200, await updCheck()); } catch (e) { return json(res, 200, { newer: false, error: '확인 못 함' }); } }
     if (req.method === 'POST' && p === '/api/update/start') { try { const i = await updCheck(); if (!i.newer) return json(res, 200, { ok: false, error: '이미 최신 버전이에요' }); updStart(i); return json(res, 200, { ok: true }); } catch (e) { return json(res, 200, { ok: false, error: e.message }); } }
     if (req.method === 'GET' && p === '/api/update/status') return json(res, 200, { state: upd.state, pct: upd.pct, err: upd.err });
