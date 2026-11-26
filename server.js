@@ -531,9 +531,15 @@ function buildExport(b) {
     vLabel = `[sg${k}]`;
   };
   const texts = aOnly ? [] : (b.texts || []).filter((t) => (t.kind === 'text' || t.kind === 'sub') && String(t.text || '').trim());
-  const zOf = (t) => ({ pip: 0, sticker: 1, shape: 1, text: 2, sub: 3 }[t.kind] ?? 1) * 1000 + (+t.lane || 0);
+  const bgs = aOnly ? [] : (b.texts || []).filter((t) => t.kind === 'bg');
+  const doBg = (t, k) => {   // 단계가 바뀔 때 깔리는 색 화면
+    const st = Math.max(0, +t.start || 0), en = Math.max(st + 0.05, +t.end || 0), op = clamp((t.opacity == null ? 100 : +t.opacity) / 100, 0, 1);
+    filt.push(`${vLabel}drawbox=x=0:y=0:w=${W}:h=${H}:color=${hex(t.color, '0x1f6feb')}@${n(op)}:t=fill:enable='between(t,${n(st)},${n(en)})'[bgb${k}]`);
+    vLabel = `[bgb${k}]`;
+  };
+  const zOf = (t) => ({ bg: -1, pip: 0, sticker: 1, shape: 1, text: 2, sub: 3 }[t.kind] ?? 1) * 1000 + (+t.lane || 0);
   const ops = [];   // 레이어 순서(z)대로 아래에서 위로 쌓아요
-  if (!aOnly) { pips.forEach((t, k) => ops.push({ z: zOf(t), o: 0, f: () => doPip(t, k) })); stks.forEach((t, k) => ops.push({ z: zOf(t), o: 1, f: () => doStk(t, k) })); shapes.forEach((t, k) => ops.push({ z: zOf(t), o: 1, f: () => doShape(t, k) })); texts.forEach((t) => ops.push({ z: zOf(t), o: t.kind === 'sub' ? 3 : 2, txt: t })); }
+  if (!aOnly) { bgs.forEach((t, k) => ops.push({ z: zOf(t), o: 0, f: () => doBg(t, k) })); pips.forEach((t, k) => ops.push({ z: zOf(t), o: 0, f: () => doPip(t, k) })); stks.forEach((t, k) => ops.push({ z: zOf(t), o: 1, f: () => doStk(t, k) })); shapes.forEach((t, k) => ops.push({ z: zOf(t), o: 1, f: () => doShape(t, k) })); texts.forEach((t) => ops.push({ z: zOf(t), o: t.kind === 'sub' ? 3 : 2, txt: t })); }
   ops.sort((p, q) => p.z - q.z || p.o - q.o);
   let run = [];
   const flush = () => { if (!run.length) return; const nm = `sub${ass.length}.ass`; ass.push(buildAss(run, W, H, total)); filt.push(`${vLabel}ass=${nm}:fontsdir=fonts,format=yuv420p[vtxt${ass.length}]`); vLabel = `[vtxt${ass.length}]`; run = []; };

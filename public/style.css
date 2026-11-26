@@ -554,3 +554,4 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .stkbody{flex:1;min-width:0;padding:12px 10px}
 .stkbody .stk-names{grid-template-columns:repeat(2,1fr)!important}
 .pane.stkwrap{flex-direction:row!important;align-items:stretch}.stknav{align-self:stretch}
+.bgsw{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}.bgsw-b{width:34px;height:34px;border-radius:9px;border:2px solid #3a3a44;cursor:pointer;padding:0}.bgsw-b:hover{border-color:#fff}.bgdot{width:16px;height:16px;border-radius:50%;border:1px solid #666;flex:none}

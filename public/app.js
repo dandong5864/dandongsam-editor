@@ -224,7 +224,7 @@ const tf = (k) => S.trk[k] || (S.trk[k] = {});
 const trkOfText = (x) => x.kind === 'sub' ? 's' : x.kind === 'pip' ? 'p' : x.kind === 'text' ? 't' : 'k';
 const lockedEl = (el) => { const t = el && el.closest && el.closest('.track'); return !!(t && tf(t.id.slice(6)).l); };
 /* ===== 레이어 사이 끼워 넣기 (캡컷처럼 줄이 보이고 거기에 놓으면 새 레이어) ===== */
-const KBASE = { pip: 0, sticker: 1, shape: 1, fx: 1, zoom: 1, text: 2, sub: 3 };
+const KBASE = { bg: 0, pip: 0.5, sticker: 1, shape: 1, fx: 1, zoom: 1, text: 2, sub: 3 };
 let dragKind = '';
 function normLanes() {   // 같은 줄 묶음(스티커·텍스트·자막·오버레이) 안에서 레이어 번호 정리: 겹치면 새 레이어, 빈 레이어는 없애요
   const out = {}, groups = {};
@@ -296,6 +296,7 @@ function addPip(mid, t, px, py, lane) {
     const r = stage.getBoundingClientRect(); addPip(m.id, S.t, Math.round(clamp((e.clientX - r.left) / r.width * 100, 0, 100) * 10) / 10, Math.round(clamp((e.clientY - r.top) / r.height * 100, 0, 100) * 10) / 10);
   });
 })();
+const bgEls = {};
 function syncPip() {
   const W = stage.clientWidth, H = stage.clientHeight; if (!W) return;
   S.texts.forEach((x) => {
@@ -310,7 +311,31 @@ function syncPip() {
     if (playing && !reverse) { if (el.paused) { try { el.currentTime = want; } catch (e) {} el.play().catch(() => {}); } else if (drift > 0.35) { try { el.currentTime = want; } catch (e) {} } }
     else { if (!el.paused) el.pause(); if (drift > 0.04) { try { el.currentTime = want; } catch (e) {} } }
   });
+  S.texts.forEach((x) => {   // 배경(단계 바뀔 때 깔리는 색 화면)
+    if (x.kind !== 'bg') return;
+    let el = bgEls[x.id]; const on = S.t >= x.start - 1e-6 && S.t < x.end && !tf('k').h;
+    if (!on) { if (el) el.style.display = 'none'; return; }
+    if (!el) { el = bgEls[x.id] = document.createElement('div'); el.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:0'; pipbox.append(el); }
+    el.style.display = 'block'; el.style.background = x.color || '#1f6feb'; el.style.opacity = (x.opacity == null ? 100 : x.opacity) / 100;
+  });
+  Object.keys(bgEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'bg')) { bgEls[id].remove(); delete bgEls[id]; } });
   Object.keys(pipEls).forEach((id) => { if (!S.texts.some((q) => q.id === id && q.kind === 'pip')) { pipEls[id].pause(); pipEls[id].remove(); delete pipEls[id]; } });
+}
+function addBg(color) {
+  push(); layout(); const st = Math.round(S.t * 100) / 100, x = { id: nid(), kind: 'bg', start: st, end: Math.round((st + 3) * 100) / 100, color: color || '#1f6feb', opacity: 100, lane: 0 };
+  S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(); renderProps(); if (ltab === 'tpl') buildLeft();
+}
+function renderBgProps(p, x) {
+  const upd = () => { renderTL(true); renderOv(true); syncPip(); saveLocal(); };
+  p.append(E('div', 'sel-title', '배경'));
+  p.append(sec('색'));
+  const w = E('div', 'colorline'); w.append(colorPicker('배경 색', () => x.color || '#1f6feb', (v, once) => { if (once) pushOnce('bgc' + x.id); else push(); x.color = v; upd(); })); p.append(w);
+  p.append(slider('진하기', 0, 100, 1, x.opacity == null ? 100 : x.opacity, (v) => v + '%', (v) => { x.opacity = v; upd(); }, 100));
+  p.append(sec('나오는 시간'));
+  const r2 = E('div', 'row2');
+  r2.append(timeBox('시작', x.start, (t) => { push(); const len = x.end - x.start; x.start = Math.max(0, t); x.end = x.start + len; changed(true); }), timeBox('끝', x.end, (t) => { push(); x.end = Math.max(x.start + 0.1, t); changed(true); }));
+  p.append(r2);
+  const br = E('div', 'btnrow'); const b2 = E('button', 'danger', '🗑 삭제'); b2.onclick = del; br.append(b2); p.append(br);
 }
 function renderPipProps(p, x) {
   const m = S.media[x.mediaId] || {}, asp = (m.height && m.width) ? m.height / m.width : x.h / Math.max(0.1, x.w);
@@ -389,6 +414,7 @@ function renderOv0(force) {
   const key = W + '|' + (S.sel && S.sel.type === 't' ? S.sel.id : '') + '|' + JSON.stringify(list);
   if (!force && key === ovKey) return; ovKey = key; ov.innerHTML = ''; setTimeout(syncPip, 0);
   list.forEach((x) => {
+    if (x.kind === 'bg') return;
     const d = E('div', 'ovt' + (x.kind === 'sticker' ? ' stk' : '') + (isSel('t', x.id) ? ' sel' : '')); d.dataset.id = x.id;
     if (x.kind === 'sticker') {
       d.style.left = x.x + '%'; d.style.top = x.y + '%'; d.style.width = (x.scale || 30) + '%'; d.style.transform = `translate(-50%,-50%) rotate(${x.rot || 0}deg)`;
@@ -576,10 +602,10 @@ function renderTL0() {
   const NL = normLanes();
   [['text', trackT], ['sticker', trackK], ['sub', trackS], ['pip', trackP]].forEach(([kind, tr]) => {
     tr.innerHTML = '';
-    S.texts.filter((x) => x.kind === kind || (kind === 'sticker' && (x.kind === 'shape' || x.kind === 'fx' || x.kind === 'zoom'))).forEach((x) => {
+    S.texts.filter((x) => x.kind === kind || (kind === 'sticker' && (x.kind === 'shape' || x.kind === 'fx' || x.kind === 'zoom' || x.kind === 'bg'))).forEach((x) => {
       const d = E('div', 'tclip ' + kind + (isSel('t', x.id) ? ' sel' : '')); d.dataset.id = x.id;
-      d.style.left = x.start * S.zoom + 'px'; d.style.width = Math.max(6, (x.end - x.start) * S.zoom) + 'px';
-      d.innerHTML = `<i class="h l" data-h="l"></i><i class="h r" data-h="r"></i><span class="cl-name">${esc(kind === 'pip' ? ((S.media[x.mediaId] || {}).name || '영상') : kind === 'sticker' ? x.name || (x.kind === 'shape' ? (SHAPE_NAMES[x.shape] || '도형') : x.kind === 'fx' ? (x.mode === 'blur' ? '블러' : '모자이크') : x.kind === 'zoom' ? '확대 ' + (x.scale || 150) + '%' : '스티커') : String(x.text).replace(/\n/g, ' '))}</span>`; if (kind === 'pip') { const pm = S.media[x.mediaId]; if (pm && pm.thumb) d.style.backgroundImage = `url(/api/thumb/${pm.id})`; } tr.append(d);
+      d.style.left = x.start * S.zoom + 'px'; d.style.width = Math.max(6, (x.end - x.start) * S.zoom) + 'px'; if (x.kind === 'bg') { d.style.background = x.color || '#1f6feb'; d.style.borderColor = 'rgba(255,255,255,.35)'; }
+      d.innerHTML = `<i class="h l" data-h="l"></i><i class="h r" data-h="r"></i><span class="cl-name">${esc(kind === 'pip' ? ((S.media[x.mediaId] || {}).name || '영상') : kind === 'sticker' ? x.name || (x.kind === 'bg' ? '배경' : x.kind === 'shape' ? (SHAPE_NAMES[x.shape] || '도형') : x.kind === 'fx' ? (x.mode === 'blur' ? '블러' : '모자이크') : x.kind === 'zoom' ? '확대 ' + (x.scale || 150) + '%' : '스티커') : String(x.text).replace(/\n/g, ' '))}</span>`; if (kind === 'pip') { const pm = S.media[x.mediaId]; if (pm && pm.thumb) d.style.backgroundImage = `url(/api/thumb/${pm.id})`; } tr.append(d);
     });
     // 같은 시간에 겹치는 항목은 줄을 나눠서 위아래로 쌓아요 (캡컷처럼)
     const items = [...tr.children].map((el) => { const x = S.texts.find((q) => q.id === el.dataset.id); return { el, x }; }).filter((o) => o.x).sort((p, q) => p.x.start - q.x.start || p.x.end - q.x.end);
@@ -776,7 +802,7 @@ function select(type, id) {
   if (type === 't') { const x = S.texts.find((t) => t.id === id); if (x && x.kind === 'sub') rtab = 'sub'; }   // 자막 클립을 누르면 오른쪽 자막 목록에서 그 줄로 이동
   renderTL(); renderProps(); renderOv(true); $('#t-del').disabled = !S.sel;
   if (type === 't' && rtab === 'sub') setTimeout(() => { const r = document.querySelector(`#props .subrow[data-id="${id}"]`); if (r) r.scrollIntoView({ block: 'center' }); }, 0);
-  if (ltab === 'text' || ltab === 'stk') buildLeft();
+  if (ltab === 'text' || ltab === 'stk' || ltab === 'tpl') buildLeft();
 }
 function addToTimeline(mid, atHead) {
   const m = S.media[mid]; if (!m) return; push();
@@ -812,7 +838,7 @@ let drag = null;
 const OPT = (() => { try { return Object.assign({ snap: true, magnet: true }, JSON.parse(localStorage.getItem('vtk.opt.v1') || '{}')); } catch (e) { return { snap: true, magnet: true }; } })();
 const snapPts = (skipId) => [0, S.t, ...S.clips.map((c) => c.start), S.total, ...S.audio.filter((a) => a.id !== skipId).flatMap((a) => [a.start, a.start + a.out - a.in]), ...S.texts.filter((x) => x.id !== skipId).flatMap((x) => [x.start, x.end])];
 OPT.link = Object.assign({ on: true, text: true, fx: true, sticker: true, pip: true, audio: true }, OPT.link || {});
-const linkKind = (x) => x.kind === 'fx' || x.kind === 'zoom' ? 'fx' : x.kind === 'sticker' || x.kind === 'shape' ? 'sticker' : x.kind === 'pip' ? 'pip' : 'text';
+const linkKind = (x) => x.kind === 'fx' || x.kind === 'zoom' ? 'fx' : x.kind === 'sticker' || x.kind === 'shape' || x.kind === 'bg' ? 'sticker' : x.kind === 'pip' ? 'pip' : 'text';
 const isLinked = (x) => !!(OPT.link.on && OPT.link[linkKind(x)]);   // 연결 설정에서 고른 종류만 메인 클립을 따라가요
 const audioLinked = () => !!(OPT.link.on && OPT.link.audio);
 const saveOpt = () => { try { localStorage.setItem('vtk.opt.v1', JSON.stringify(OPT)); } catch (e) {} };
@@ -1028,8 +1054,13 @@ function renderProps() {
   renderPropsSel(p, s);
 }
 function bgControls(p) {
-  if (S.canvas !== '9:16') return;
   p.append(sec('배경'));
+  const sw = E('div', 'bgsw'); ['#1f6feb', '#ffffff', '#000000', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b'); b.style.background = c; b.title = c; b.onclick = () => addBg(c); sw.append(b); }); p.append(sw);
+  const ab = E('button', 'primary bigbtn', '＋ 배경 추가'); ab.onclick = () => addBg(); p.append(ab);
+  const bl = S.texts.filter((x) => x.kind === 'bg').sort((a, b) => a.start - b.start);
+  if (bl.length) { p.append(sec('넣은 배경')); bl.forEach((x) => { const r = E('div', 'titem' + (isSel('t', x.id) ? ' sel' : '')); const dot = E('span', 'bgdot'); dot.style.background = x.color || '#1f6feb'; r.append(E('span', 'tm', fmt(x.start, 1)), dot, E('span', 'tx', '배경')); r.onclick = () => { select('t', x.id); seek(x.start + 0.01); }; p.append(r); }); }
+  if (S.canvas !== '9:16') return;
+  p.append(sec('위·아래 띠'));
   const bc = chips([['none', '🚫 없음'], ['tpl', '위·아래 띠']], tplOn() ? 'tpl' : 'none', (v) => { push(); if (v === 'tpl') { S.tpl = S.tpl || { ...TPLS[0].v }; } else { S.tpl = null; S.bg = 'none'; } changed(); });
   bc.classList.add('wide2'); p.append(bc);
   if (!tplOn()) return;
@@ -1209,6 +1240,7 @@ function renderTextProps(p, x) {
   if (x.kind === 'sticker') return renderStickerProps(p, x);
   if (x.kind === 'shape') return renderShapeProps(p, x);
   if (x.kind === 'pip') return renderPipProps(p, x);
+  if (x.kind === 'bg') return renderBgProps(p, x);
   if (x.kind === 'fx') return renderFxProps(p, x);
   if (x.kind === 'zoom') return renderZoomProps(p, x);
   const isT = x.kind === 'text'; const upd = () => { renderTL(); renderOv(true); saveLocal(); };
@@ -1404,7 +1436,7 @@ function buildLeft() {
   } else if (ltab === 'fx') {
     const d = E('div', 'pane'); b.append(d); buildFxTab(d);
   } else if (ltab === 'tpl') {
-    const d = E('div', ''); d.style.paddingBottom = '14px'; b.append(d); bgControls(d);
+    const d = E('div', ''); d.style.padding = '0 12px 14px'; b.append(d); bgControls(d);
   }
 }
 document.querySelectorAll('#ltabs button').forEach((b) => { b.onclick = () => setTab(b.dataset.tab); });
