@@ -1038,7 +1038,7 @@ async function withPins(kind, feed) {
   const out = []; for (const v of pins) { const x = await pinItem(v, feed); if (x && !out.some((o) => normUrl(o.url) === normUrl(x.url))) out.push(x); }
   return out.concat((feed || []).filter((f) => !out.some((o) => normUrl(o.url) === normUrl(f.url) || (ytId(o.url) && ytId(o.url) === ytId(f.url)))));
 }
-// ---- 예시 영상 좋아요 · 자랑하기 (구글 설문지로 보내고, 응답 시트로 모아요) ----
+// ---- 영상 갤러리 좋아요 · 올리기 (구글 설문지로 보내고, 응답 시트로 모아요) ----
 let exCfg = null; const lkCache = { t: 0, v: {} };
 const vkey = (u) => ytId(u) || String(u || '').trim();
 const LIKE_FILE = () => path.join(DATA_ROOT, 'likes.json');
@@ -1069,7 +1069,7 @@ async function examplesWithLikes() {
   let rank = 0, prev = -1; items.forEach((it) => { if (it.n > 0) { if (it.n !== prev) { rank++; prev = it.n; } it.rank = rank; } });
   const lk = exCfg && exCfg.like || {}, sd = exCfg && exCfg.send || {};
   const tx = (v) => String(v || '').replace(/[<>]/g, '').trim().slice(0, 40);
-  return { title: tx(exCfg && exCfg.title), hint: tx(exCfg && exCfg.hint), sendText: String((exCfg && exCfg.sendText) || '').replace(/[<>]/g, '').trim().slice(0, 200), form: base.form, more: base.more, canLike: !!(formPostUrl(lk.form) && lk.video), canSend: !!(formPostUrl(sd.form || base.form) && sd.link),
+  return { title: tx(exCfg && exCfg.title), hint: tx(exCfg && exCfg.hint), sendLabel: tx(exCfg && exCfg.sendLabel), sendText: String((exCfg && exCfg.sendText) || '').replace(/[<>]/g, '').trim().slice(0, 200), form: base.form, more: base.more, canLike: !!(formPostUrl(lk.form) && lk.video), canSend: !!(formPostUrl(sd.form || base.form) && sd.link),
     list: items.slice(0, 12).map(({ n, i, ...x }) => x) };   // 숫자는 보내지 않고 순위만 보내요
 }
 async function examplesFeed() {

@@ -1,7 +1,8 @@
 {
   "title": "영상 갤러리",
   "hint": "♥ 좋아요를 눌러 주세요",
-  "sendText": "단동샘 편집기로 만든 영상을 자랑해 주세요!\n제작된 영상 링크를 붙여 넣고 보내기를 누르면, 확인한 뒤 영상 갤러리에 올라가요.",
+  "sendText": "단동샘 편집기로 만든 영상을 올려 주세요!\n제작된 영상 링크를 붙여 넣고 보내기를 누르면, 확인한 뒤 영상 갤러리에 올라가요.",
+  "sendLabel": "영상 갤러리에 올리기",
   "form": "https://docs.google.com/forms/d/e/1FAIpQLSe6IN4A2xKZyRq-DrhXrZq3ip1I10et8-YJ5rBFklH-crjtBg/viewform",
   "sheet": "https://docs.google.com/spreadsheets/d/1k2Xvm4_xkdn5iD5ayi-9iunov8h0yjKQGa5l57kSl98/edit",
   "send": {
