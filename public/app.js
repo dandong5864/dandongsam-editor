@@ -66,7 +66,19 @@ function askBox(msg, o) {
 }
 const ask = (msg, o) => askBox(msg, o);
 const askText = (msg, def) => askBox(msg, { input: true, def });
+let goneBox = null;
+function showGone() {   // 편집기(서버)가 꺼졌을 때: 이유와 해결 방법을 크게 알려줘요
+  if (goneBox) return;
+  const bg = E('div', ''), bx = E('div', '');
+  bg.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center';
+  bx.style.cssText = 'background:#1c1c22;border:1px solid #3a3a44;border-radius:16px;padding:30px 34px;max-width:460px;text-align:center;color:#fff;line-height:1.7';
+  bx.innerHTML = '<div style="font-size:42px">💤</div><div style="font-size:21px;font-weight:700;margin:6px 0 10px">자리를 너무 오래 비워 두셨어요</div><div style="font-size:16px;color:#cfd0d8">그동안 편집기가 쉬려고 꺼졌어요.<br>편집기를 다시 실행해 주세요.<br>작업하던 내용은 자동으로 저장되어 있어요.</div>';
+  const bt = E('button', 'primary bigbtn', '다시 연결하기'); bt.style.marginTop = '18px';
+  bt.onclick = () => { fetch('/api/ping').then((r) => { if (r.ok) location.reload(); else bt.textContent = '아직 꺼져 있어요 · 편집기를 다시 실행해 주세요'; }).catch(() => { bt.textContent = '아직 꺼져 있어요 · 편집기를 다시 실행해 주세요'; }); };
+  bx.append(bt); bg.append(bx); document.body.append(bg); goneBox = bg;
+}
 function toast(msg, action, ms = 3500) {
+  if (/서버에 연결할 수 없어요/.test(msg)) return showGone();
   const t = E('div', 'toast'); t.append(E('span', '', esc(msg)));
   if (action) { const b = E('button', '', action.label); b.onclick = () => { action.fn(); t.remove(); }; t.append(b); }
   $('#toast').append(t); setTimeout(() => t.remove(), action ? 7000 : ms);
@@ -1635,7 +1647,7 @@ async function startExport(o) {
 let sfxAudio = null;
 function buildSfx(d) {
   const render = async () => {
-    let r; try { r = await fetch('/api/sfx').then((x) => x.json()); } catch (e) { d.append(E('div', 'err', '서버에 연결할 수 없어요')); return; }
+    let r; try { r = await fetch('/api/sfx').then((x) => x.json()); } catch (e) { showGone(); return; }
     d.innerHTML = '';
     { const rb = E('button', 'primary bigbtn', '🎙 내 목소리 녹음하기'); rb.style.marginBottom = '10px'; rb.onclick = recordDialog; d.append(rb); }
     const up = E('div', 'btnrow'); up.style.padding = '0'; const ub = E('button', 'primary bigbtn', '＋ 내 컴퓨터에서 효과음 파일 추가'); const fi = E('input'); fi.type = 'file'; fi.multiple = true; fi.accept = 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac'; fi.hidden = true;
@@ -1762,8 +1774,9 @@ $('#t-zoom').oninput = (e) => setZoom(+e.target.value);
 [video, spare].forEach((el) => { el.addEventListener('ended', () => { if (playing && cur && el === video) advance(cur); }); el.addEventListener('loadedmetadata', () => { if (el === video) updateStage(); }); });
 
 /* ============ 창을 닫으면 프로그램도 종료 ============ */
-setInterval(() => { fetch('/api/ping').catch(() => {}); }, 5000); fetch('/api/ping').catch(() => {});
-addEventListener('focus', () => { fetch('/api/ping').catch(() => {}); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) fetch('/api/ping').catch(() => {}); });
+let pingFail = 0; const ping = () => fetch('/api/ping').then(() => { pingFail = 0; }).catch(() => { if (++pingFail >= 2) showGone(); });
+setInterval(ping, 5000); ping();
+addEventListener('focus', ping); document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
 addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } catch (e) {} });
 
 /* ============ 시작 ============ */
