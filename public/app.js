@@ -2107,12 +2107,29 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     items.slice(0, 6).forEach((it) => { const c = E('button', 'hm-card'); c.innerHTML = `<div class="hm-th" style="${it.thumb ? `--im:url('${esc(it.thumb)}')` : ''}"></div><div class="hm-tt">${esc(it.title)}</div>`; c.onclick = () => open(it.url); box.append(c); });
   };
   const RELEASE_PAGE = 'https://github.com/dandong5864/dandongsam-editor/releases/latest';
+  // 설치할 때 윈도우의 파란 경고 창이 뜰 수 있어서, 미리 무엇을 누르면 되는지 그림으로 보여 줘요
+  function smartGuide(title, okLabel, pre) {
+    return new Promise((done) => {
+      const bg = E('div', 'askbg'), bx = E('div', 'askbox sgbox');
+      bx.append(E('div', 'ask-t', title));
+      bx.append(E('div', 'ask-d', (pre ? pre + '\n\n' : '') + '설치할 때 아래처럼 파란 창이 뜰 수 있어요.\n① <b>추가 정보</b>를 누르고 ② <b>실행</b>을 누르면 설치돼요.'));
+      const fig = E('div', 'sg-fig');
+      fig.append(E('div', 'sg-win', '<div class="sg-h">Windows의 PC 보호</div><div class="sg-p">Microsoft Defender SmartScreen에서 인식할 수 없는 앱의 시작을 차단했습니다.</div><div class="sg-link">추가 정보<span class="sg-n">①</span></div><div class="sg-btns"><span class="sg-b">실행 안 함</span></div>'));
+      fig.append(E('div', 'sg-arrow', '→'));
+      fig.append(E('div', 'sg-win', '<div class="sg-h">Windows의 PC 보호</div><div class="sg-p">앱: DandongsamEditor-Setup.exe<br>게시자: 알 수 없는 게시자</div><div class="sg-btns"><span class="sg-b sg-hi">실행<span class="sg-n">②</span></span><span class="sg-b">실행 안 함</span></div>'));
+      bx.append(fig);
+      const row = E('div', 'ask-b'), no = E('button', '', '취소'), ok = E('button', 'primary', okLabel);
+      const end = (v) => { bg.remove(); done(v); };
+      no.onclick = () => end(false); ok.onclick = () => end(true); row.append(no, ok); bx.append(row);
+      bg.append(bx); document.body.append(bg); ok.focus();
+    });
+  }
   async function runUpdate(u) {
-    if (!(await ask('새 버전으로 업데이트할까요?\n작업 중인 내용은 자동으로 저장돼요.\n설치하는 동안 편집기가 잠깐 꺼졌다가 다시 열려요.', { ok: '업데이트' }))) return;
+    if (!(await smartGuide('새 버전으로 업데이트할까요?', '업데이트', '작업 중인 내용은 자동으로 저장되고, 설치하는 동안 편집기가 잠깐 꺼졌다가 다시 열려요.'))) return;
     try { saveLocalNow(); } catch (e) {}
     const bg = E('div', 'askbg'), bx = E('div', 'askbox'); const t = E('div', 'ask-t', '내려받는 중… 0%'), bar = E('div', 'upbar', '<i></i>'), row = E('div', 'ask-b');
     bx.append(t, bar, row); bg.append(bx); document.body.append(bg);
-    const fail = (msg) => { t.textContent = msg; bar.remove(); row.innerHTML = ''; const lk = E('button', 'primary', '⬇ 직접 받으러 가기'); lk.onclick = () => { window.open(RELEASE_PAGE, '_blank', 'noopener'); }; const cl = E('button', '', '닫기'); cl.onclick = () => bg.remove(); row.append(cl, lk); };
+    const fail = (msg) => { t.textContent = msg; bar.remove(); row.innerHTML = ''; const lk = E('button', 'primary', '⬇ 직접 받으러 가기'); lk.onclick = async () => { if (await smartGuide('설치 파일을 직접 받으러 갈까요?', '받으러 가기')) window.open(RELEASE_PAGE, '_blank', 'noopener'); }; const cl = E('button', '', '닫기'); cl.onclick = () => bg.remove(); row.append(cl, lk); };
     const st = await fetch('/api/update/start', { method: 'POST' }).then((r) => r.json()).catch(() => ({ ok: false }));
     if (!st.ok) return fail(st.error || '업데이트를 시작하지 못했어요');
     const poll = async () => {
