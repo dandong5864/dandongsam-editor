@@ -2161,6 +2161,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     const xg = E('div', 'hm-grid cards'); xc.append(xg); xg.append(E('div', 'hm-empty', '불러오는 중…'));
     fetch('/api/feed/examples').then((r) => r.json()).catch(() => ({ list: [] })).then((r) => {
       if (r.more) { const xb = E('button', 'hm-link', '전체 보기 ↗'); xb.onclick = () => open(r.more); xh.append(xb); }
+      if (r.form) { const fb = E('button', 'hm-link', '내 영상 보내기 ↗'); fb.title = '자동 편집으로 만든 영상 링크를 보내 주세요'; fb.onclick = () => open(r.form); xh.append(fb); }
       const l = r.list || []; if (l.length) cardList('예시', '', l, xg); else { xg.innerHTML = ''; xg.append(E('div', 'hm-empty', '예시 영상을 준비하고 있어요.')); }
     });
     document.body.append(el);

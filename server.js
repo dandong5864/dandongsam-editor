@@ -921,6 +921,22 @@ async function blogFeed(blogUrl) {
 // 목록은 public/examples.json 하나만 고치면 돼요. 깃허브 main에 올리면 이미 설치한 편집기에도 10분 안에 반영돼요.
 const EX_URL = 'https://raw.githubusercontent.com/dandong5864/dandongsam-editor/main/public/examples.json';
 const ytId = (u) => { const m = /(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/.exec(String(u || '')); return m ? m[1] : (/^[\w-]{11}$/.test(String(u || '').trim()) ? String(u).trim() : ''); };
+async function ytTitle(id) { try { return JSON.parse(await httpGet('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))).title || ''; } catch (e) { return ''; } }
+// 구글 시트 주소(공유 링크든 "웹에 게시" 링크든)를 CSV 주소로 바꿔요
+function sheetCsvUrl(u) {
+  u = String(u).trim(); if (/output=csv|format=csv/.test(u)) return u;
+  const pub = /\/spreadsheets\/d\/e\/([\w-]+)/.exec(u); const gid = (/[#&?]gid=(\d+)/.exec(u) || [])[1];
+  if (pub) return `https://docs.google.com/spreadsheets/d/e/${pub[1]}/pub?output=csv` + (gid ? '&gid=' + gid : '');
+  const id = /\/spreadsheets\/d\/([\w-]+)/.exec(u); if (id) return `https://docs.google.com/spreadsheets/d/${id[1]}/export?format=csv` + (gid ? '&gid=' + gid : '');
+  return u;
+}
+function parseCsv(t) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; } else cur += c; }
+  if (cur || row.length) { row.push(cur); rows.push(row); } return rows;
+}
 async function examplesFeed() {
   let cfg = null;
   try { cfg = JSON.parse(await httpGet(EX_URL)); } catch (e) {}
@@ -932,6 +948,23 @@ async function examplesFeed() {
     let title = it.title || '';
     if (!title && id) { try { title = JSON.parse(await httpGet('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))).title || ''; } catch (e) {} }
     list.push({ title: title || '자동 편집 예시', url: id ? (/\/shorts\//.test(it.url) ? 'https://www.youtube.com/shorts/' + id : 'https://www.youtube.com/watch?v=' + id) : it.url, thumb: it.thumb || (id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : '') });
+  }
+  // 구글 설문지로 받은 영상: 응답 시트에서 "승인"에 체크한 줄만, 최근 것부터 보여 줘요
+  if (cfg.sheet) {
+    try {
+      const csv = await httpGet(sheetCsvUrl(cfg.sheet), 5); const rows = parseCsv(csv); const head = (rows.shift() || []).map((h) => String(h).trim());
+      const ai = head.findIndex((h) => /승인/.test(h)), ti = head.findIndex((h) => /제목/.test(h)), ni = head.findIndex((h) => /이름|닉네임/.test(h));
+      const ok = (v) => /^(true|o|y|yes|v|✔|✅|☑|승인|예|네|ㅇ|1)$/i.test(String(v || '').trim());
+      for (const r of rows.reverse()) {
+        if (ai < 0 || !ok(r[ai])) continue;
+        const link = r.find((c) => ytId(c) || /^https?:\/\/\S+\.(mp4|webm|mov)(\?\S*)?$/i.test(String(c).trim())); if (!link) continue;
+        const u = String(link).trim(), id = ytId(u); if (list.some((x) => id ? x.url.includes(id) : x.url === u)) continue;
+        let title = ti >= 0 ? String(r[ti] || '').trim() : ''; if (!title && id) title = await ytTitle(id);
+        const by = ni >= 0 ? String(r[ni] || '').trim() : '';
+        list.push({ title: (title || '자동 편집 예시') + (by ? ' · ' + by : ''), url: id ? (/\/shorts\//.test(u) ? 'https://www.youtube.com/shorts/' : 'https://www.youtube.com/watch?v=') + id : u, thumb: id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : '' });
+        if (list.length >= 24) break;
+      }
+    } catch (e) {}
   }
   // 사이트 주소(page)를 넣으면 그 페이지에 있는 동영상 링크(유튜브·mp4 등)만 골라서 순서대로 보여 줘요
   for (const pg of [].concat(cfg.page || [])) {
@@ -950,7 +983,8 @@ async function examplesFeed() {
     try { const xml = await httpGet('https://www.youtube.com/feeds/videos.xml?playlist_id=' + pl[1]); const re = /<entry>([\s\S]*?)<\/entry>/g; let m;
       while ((m = re.exec(xml))) { const id = (/<yt:videoId>([^<]+)</.exec(m[1]) || [])[1]; const t = (/<title>([\s\S]*?)<\/title>/.exec(m[1]) || [])[1]; if (id && !list.some((x) => x.url.includes(id))) list.push({ title: xmlText(t), url: 'https://www.youtube.com/watch?v=' + id, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }); } } catch (e) {}
   }
-  return { list: list.slice(0, 12), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || [].concat(cfg.page || [])[0] || '') };
+  const form = /^https:\/\/(docs\.google\.com\/forms|forms\.gle)\//.test(String(cfg.form || '')) ? cfg.form : '';
+  return { form, list: list.slice(0, 12), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || [].concat(cfg.page || [])[0] || '') };
 }
 
 // ---- 음성 → 자막 (Whisper large-v3-turbo, 내 컴퓨터에서 실행) ----
