@@ -334,6 +334,9 @@ function syncPip() {
     if (!el) { el = pipEls[x.id] = document.createElement('video'); el.playsInline = true; el.preload = 'auto'; el.src = (S.media[x.mediaId] || {}).hasAlpha ? '/media/' + x.mediaId + '?a=1' : mediaUrl(x.mediaId); el.style.cssText = 'position:absolute;object-fit:fill;pointer-events:none'; pipbox.append(el); }
     const w = x.w / 100 * W, h = x.h / 100 * W;
     el.style.zIndex = (x.lane || 0) + 1; el.style.display = 'block'; el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (x.x / 100 * W - w / 2) + 'px'; el.style.top = (x.y / 100 * H - h / 2) + 'px';
+    // 테두리·둥근 모서리 (내보내기와 같은 계산: 두께는 가로 1080 기준, 둥글기는 짧은 변의 절반 기준 %)
+    const bw = x.border ? Math.max(1, +x.bw || 8) * W / 1080 : 0, rad = clamp(+x.br || 0, 0, 100) / 100 * Math.min(w, h) / 2;
+    el.style.boxSizing = 'border-box'; el.style.border = bw ? `${bw}px solid ${x.bc || '#ffffff'}` : 'none'; el.style.borderRadius = rad + 'px'; el.style.background = bw ? (x.bc || '#ffffff') : 'transparent';
     el.style.opacity = (x.opacity == null ? 100 : x.opacity) / 100; el.volume = tf('p').m ? 0 : clamp((x.vol == null ? 100 : x.vol) / 100, 0, 1);
     const want = (x.in || 0) + (S.t - x.start), drift = Math.abs(el.currentTime - want);
     if (playing && !reverse) { if (el.paused) { try { el.currentTime = want; } catch (e) {} el.play().catch(() => {}); } else if (drift > 0.35) { try { el.currentTime = want; } catch (e) {} } }
@@ -434,6 +437,13 @@ function renderPipProps(p, x) {
   p.append(slider('가로 위치', 0, 100, 0.5, x.x, (v) => v + '%', (v) => { x.x = v; upd(); }, 72));
   p.append(slider('세로 위치', 0, 100, 0.5, x.y, (v) => v + '%', (v) => { x.y = v; upd(); }, 28));
   p.append(slider('불투명도', 0, 100, 1, x.opacity == null ? 100 : x.opacity, (v) => v + '%', (v) => { x.opacity = v; upd(); }, 100));
+  p.append(sec('테두리'));
+  const bch = chips([[0, '없음'], [1, '테두리']], x.border ? 1 : 0, (v) => { push(); x.border = !!v; if (x.border && !x.bw) x.bw = 8; renderProps(); upd(); }); bch.classList.add('slim'); p.append(bch);
+  if (x.border) {
+    const bc = E('div', 'colorline'); bc.append(colorPicker('테두리 색', () => x.bc || '#ffffff', (v, once) => { if (once) pushOnce('pbc' + x.id); else push(); x.bc = v; upd(); })); p.append(bc);
+    p.append(slider('두께', 1, 40, 1, x.bw || 8, (v) => v, (v) => { x.bw = v; upd(); }, 8));
+  }
+  p.append(slider('모서리 둥글기', 0, 100, 1, x.br || 0, (v) => v + '%', (v) => { x.br = v; upd(); }, 0));
   if (m.hasAudio) { p.append(sec('소리')); p.append(slider('음량', 0, 200, 1, x.vol == null ? 100 : x.vol, (v) => v + '%', (v) => { x.vol = v; upd(); }, 100)); }
   p.append(sec('나오는 시간'));
   const r2 = E('div', 'row2');
@@ -1832,7 +1842,7 @@ setInterval(async () => {
   loadFonts(); fetch('/api/caps').then((r) => r.json()).then((c) => { if (c && c.ass === false) toast('이 컴퓨터의 ffmpeg는 글자 넣기(자막)를 지원하지 않아요. 내보낼 때 글자가 빠질 수 있어요', null, 9000); }).catch(() => {});
   buildLeft(); changed(true); if (S.clips.length) fitAll();
   if (window.__home) window.__home();
-  window.__vtk = { S, addText, openSample, loadFonts, seek, splitCmd, trimLeft, trimRight, del, addToTimeline, importFiles, fitAll, loadProjectData };
+  window.__vtk = { S, addText, addPip, renderProps, openSample, loadFonts, seek, splitCmd, trimLeft, trimRight, del, addToTimeline, importFiles, fitAll, loadProjectData };
 })();
 /* ============ 오류 보내기 ============ */
 // 보내기 전에 내용을 보여 주고, 사용자가 고치거나 지울 수 있어요. 사용자 이름·집 폴더 경로·이메일은 가려요.

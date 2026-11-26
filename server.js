@@ -538,7 +538,18 @@ function buildExport(b) {
     const m = media[t.mediaId], idx = inputs.filter((x) => x === '-i').length, tin = Math.max(0, +t.in || 0);
     const st = Math.max(0, +t.start || 0), en = Math.max(st + 0.05, +t.end || 0), pw = even(W * clamp(+t.w || 40, 3, 300) / 100), ph = even(W * clamp(+t.h || 22, 3, 300) / 100), op = clamp((t.opacity == null ? 100 : +t.opacity) / 100, 0, 1);
     if (hasAlpha(m)) inputs.push('-c:v', 'libvpx-vp9', '-ss', n(tin), '-t', n(en - st), '-i', alphaPathOf(m.id)); else inputs.push('-ss', n(tin), '-t', n(en - st), '-i', m.file);
-    filt.push(`[${idx}:v:0]fps=${FPS},scale=${pw}:${ph},format=rgba${op < 0.999 ? `,colorchannelmixer=aa=${n(op)}` : ''},setpts=PTS-STARTPTS+${n(st)}/TB[pp${k}]`);
+    // 테두리·둥근 모서리: 두께는 가로 1080 기준, 둥글기는 짧은 변의 절반 기준 % (미리보기와 같은 계산)
+    const bw = t.border ? Math.min(Math.floor(Math.min(pw, ph) / 2) - 2, Math.max(1, Math.round(clamp(+t.bw || 8, 1, 40) * W / 1080))) : 0;
+    const R = clamp(+t.br || 0, 0, 100) / 100 * Math.min(pw, ph) / 2, Ri = Math.max(0, R - bw);
+    const bcol = /^#[0-9a-f]{6}$/i.test(t.bc || '') ? t.bc.slice(1) : 'ffffff', [cr, cg, cb] = [0, 2, 4].map((i) => parseInt(bcol.slice(i, i + 2), 16));
+    const cov = (x0, y0, w, h, r) => `clip(${n(r)}-hypot(max(${n(x0 + r)}-X-0.5,0)+max(X+0.5-${n(x0 + w - r)},0),max(${n(y0 + r)}-Y-0.5,0)+max(Y+0.5-${n(y0 + h - r)},0))+0.5,0,1)`;
+    let shape = bw > 0 ? `,scale=${pw - 2 * bw}:${ph - 2 * bw},format=rgba,pad=${pw}:${ph}:${bw}:${bw}:color=0x${bcol}FF` : `,scale=${pw}:${ph},format=rgba`;
+    if (R >= 1) {
+      const out = cov(0, 0, pw, ph, R), inn = bw > 0 && Ri >= 1 ? cov(bw, bw, pw - 2 * bw, ph - 2 * bw, Ri) : '1';
+      shape += inn === '1' ? `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*${out}'`
+        : `,geq=r='r(X,Y)*${inn}+${cr}*(1-${inn})':g='g(X,Y)*${inn}+${cg}*(1-${inn})':b='b(X,Y)*${inn}+${cb}*(1-${inn})':a='(alpha(X,Y)*${inn}+255*(1-${inn}))*${out}'`;
+    }
+    filt.push(`[${idx}:v:0]fps=${FPS}${shape}${op < 0.999 ? `,colorchannelmixer=aa=${n(op)}` : ''},setpts=PTS-STARTPTS+${n(st)}/TB[pp${k}]`);
     filt.push(`${vLabel}[pp${k}]overlay=x=${n(W * clamp(+t.x, 0, 100) / 100)}-w/2:y=${n(H * clamp(+t.y, 0, 100) / 100)}-h/2:enable='between(t,${n(st)},${n(en)})':eof_action=pass:format=auto[pv${k}]`);
     vLabel = `[pv${k}]`;
   };
