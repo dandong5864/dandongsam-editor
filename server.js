@@ -751,9 +751,12 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
 - in < out, start < end. 모든 mediaId 는 media 에 있어야 합니다.
 - "결과" 폴더에 만든 .dsp 파일 이름은 한글이어도 됩니다 (예: 내영상_편집.dsp).
 `;
+const SKILL_SRC = path.join(ROOT, '스킬', 'dandongsam-shorts-codex');   // 편집기에 들어 있는 AI용 스킬(작업 폴더에 복사해 줘요)
+function putSkill(dir) { try { if (fs.existsSync(SKILL_SRC)) fs.cpSync(SKILL_SRC, path.join(dir, '단동샘스킬'), { recursive: true, force: true }); } catch (e) {} }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
   fs.writeFileSync(path.join(dir, '프로젝트파일_만드는법.txt'), DSP_GUIDE, 'utf8');
+  putSkill(dir);
 }
 function countIn(d, re) { let n = 0; try { fs.readdirSync(d, { withFileTypes: true }).forEach((e) => { if (e.isFile() && re.test(e.name)) n++; }); } catch (e) {} return n; }
 function jobInfo(dir, kind) {
@@ -1054,7 +1057,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/settings') {
       const b = await readBody(req); const d = path.resolve(String(b.path || ''));
       if (!autoAllowed(d) || !fs.existsSync(d)) return json(res, 400, { error: '폴더를 찾을 수 없어요' });
-      try { fs.writeFileSync(path.join(d, '편집설정.json'), JSON.stringify(b.settings || {}, null, 2), 'utf8'); fs.writeFileSync(path.join(d, '프로젝트파일_만드는법.txt'), DSP_GUIDE, 'utf8'); } catch (e) { return json(res, 500, { error: e.message }); }
+      try { fs.writeFileSync(path.join(d, '편집설정.json'), JSON.stringify(b.settings || {}, null, 2), 'utf8'); fs.writeFileSync(path.join(d, '프로젝트파일_만드는법.txt'), DSP_GUIDE, 'utf8'); putSkill(d); } catch (e) { return json(res, 500, { error: e.message }); }
       return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/auto/import') {

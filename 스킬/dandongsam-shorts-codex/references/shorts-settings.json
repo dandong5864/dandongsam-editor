@@ -1,0 +1,37 @@
+{
+  "설명": "단동샘 편집기가 만든 편집 설정 기본값입니다. 작업 폴더에 편집설정.json 이 있으면 그것을 우선 쓰세요.",
+  "canvas": "9:16",
+  "tpl": {
+    "top": 22,
+    "bottom": 22,
+    "topColor": "#000000",
+    "midColor": "#000000",
+    "botColor": "#000000",
+    "fitMid": false
+  },
+  "title": {
+    "kind": "text",
+    "font": "Cafe24 Ssurround",
+    "size": 90,
+    "color": "#ffffff",
+    "colors": [
+      "#ffffff",
+      "#FFFD00"
+    ],
+    "outline": 8,
+    "outlineColor": "#000000",
+    "x": 50,
+    "y": 16,
+    "lines": 2
+  },
+  "subtitle": {
+    "kind": "sub",
+    "font": "Cafe24 Ssurround",
+    "size": 86,
+    "color": "#ffffff",
+    "outline": 7,
+    "outlineColor": "#000000",
+    "x": 50,
+    "y": 70
+  }
+}

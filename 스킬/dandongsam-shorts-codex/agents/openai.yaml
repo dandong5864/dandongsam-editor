@@ -1,0 +1,10 @@
+interface:
+  display_name: 단동샘 쇼츠 컷편집 (Codex)
+  short_description: 내 폴더의 큰 영상도 그대로 분석해 단동샘 편집기용 .dsp 를 만들어요
+  default_prompt: $dandongsam-shorts-codex 로 이 폴더의 영상과 내레이션을 편집해서 단동샘 편집기에서 열 수 있는 .dsp 를 결과 폴더에 만들어 줘.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - codex
+  allow_implicit_invocation: true
