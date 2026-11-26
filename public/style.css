@@ -564,3 +564,5 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .stkkey{flex-direction:column!important;gap:8px!important}.stksub{flex-direction:row!important;width:auto!important;gap:6px!important}.stksb{flex:1;padding:10px 6px!important}.stksubbody{width:100%}
 
 .stkkey .stk-names{grid-template-columns:repeat(2,1fr)!important}.stkkey .stk-name{height:46px;font-size:13px;line-height:1.25;padding:0 8px;text-align:center;white-space:normal;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.stkkey .stksub{display:grid!important;grid-template-columns:repeat(2,1fr);gap:8px!important;width:100%!important}
+.stkkey .stksb{flex:none;height:46px;padding:0 8px!important;border-radius:10px;font-size:13px;line-height:1.25;background:var(--panel2,#25252b);display:flex;align-items:center;justify-content:center}
