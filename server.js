@@ -1005,6 +1005,36 @@ function parseCsv(t) {
     else if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; } else cur += c; }
   if (cur || row.length) { row.push(cur); rows.push(row); } return rows;
 }
+// ---- 홈 화면 유튜브·자료실 칸 "맨 앞 고정" ----
+// public/home.json 의 youtube / blog 목록(또는 sheet 시트의 "칸, 링크")에 적은 순서대로 맨 앞에 보여 줘요. 나머지는 최신 순.
+const HOME_URL = 'https://raw.githubusercontent.com/dandong5864/dandongsam-editor/main/public/home.json';
+const normUrl = (u) => ytId(u) ? 'yt:' + ytId(u) : String(u || '').trim().replace(/^https?:\/\/(www\.|m\.)?/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+async function homePins() {
+  return cachedFeed('homepins', async () => {
+    let cfg = null; try { cfg = JSON.parse(await httpGet(HOME_URL)); } catch (e) {}
+    if (!cfg) { try { cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'home.json'), 'utf8')); } catch (e) { cfg = {}; } }
+    const pins = { youtube: [].concat(cfg.youtube || []), blog: [].concat(cfg.blog || []) };
+    if (cfg.sheet) { try { const rows = parseCsv(await httpGet(sheetCsvUrl(cfg.sheet), 5)); const head = (rows.shift() || []).map((h) => String(h).trim());
+      const ki = head.findIndex((h) => /칸|위치|종류/.test(h)), li = head.findIndex((h) => /링크|주소|url/i.test(h)), ti = head.findIndex((h) => /제목/.test(h));
+      for (const r of rows) { const u = String(r[li >= 0 ? li : 1] || '').trim(); if (!/^https?:\/\//i.test(u)) continue; const k = String(r[ki >= 0 ? ki : 0] || ''); const it = { url: u, title: ti >= 0 ? String(r[ti] || '').trim() : '' };
+        (/자료|블로그|blog/i.test(k) ? pins.blog : ytId(u) || /유튜브|youtube/i.test(k) ? pins.youtube : pins.blog).push(it); } } catch (e) {} }
+    return pins;
+  });
+}
+async function pinItem(v, feed) {
+  const it = typeof v === 'string' ? { url: v } : (v || {}); const u = String(it.url || '').trim(); if (!/^https?:\/\//i.test(u)) return null;
+  const id = ytId(u);
+  if (id) return { title: it.title || (await cachedFeed('yt-t' + id, () => ytTitle(id))) || '유튜브 영상', url: /\/shorts\//.test(u) ? 'https://www.youtube.com/shorts/' + id : 'https://www.youtube.com/watch?v=' + id, thumb: it.thumb || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`, pin: true };
+  const f = (feed || []).find((x) => normUrl(x.url) === normUrl(u)); if (f) return { ...f, title: it.title || f.title, thumb: it.thumb || f.thumb, pin: true };
+  const meta = await cachedFeed('pg' + u, async () => { try { const h = await httpGet(u); const og = (p) => ((new RegExp(`<meta[^>]+property=["']og:${p}["'][^>]+content=["']([^"']+)`, 'i').exec(h) || new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:${p}["']`, 'i').exec(h) || [])[1] || '');
+    return { title: xmlText(og('title') || (/<title>([^<]*)<\/title>/i.exec(h) || [])[1] || ''), thumb: og('image') }; } catch (e) { return {}; } });
+  return { title: it.title || meta.title || u, url: u, thumb: it.thumb || meta.thumb || '', pin: true };
+}
+async function withPins(kind, feed) {
+  let pins = []; try { pins = (await homePins())[kind] || []; } catch (e) {}
+  const out = []; for (const v of pins) { const x = await pinItem(v, feed); if (x && !out.some((o) => normUrl(o.url) === normUrl(x.url))) out.push(x); }
+  return out.concat((feed || []).filter((f) => !out.some((o) => normUrl(o.url) === normUrl(f.url) || (ytId(o.url) && ytId(o.url) === ytId(f.url)))));
+}
 // ---- 예시 영상 좋아요 · 자랑하기 (구글 설문지로 보내고, 응답 시트로 모아요) ----
 let exCfg = null; const lkCache = { t: 0, v: {} };
 const vkey = (u) => ytId(u) || String(u || '').trim();
@@ -1304,11 +1334,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/feed/youtube') {
       const ch = String(new URL(req.url, 'http://x').searchParams.get('channel') || '');
-      try { return json(res, 200, { list: await cachedFeed('yt' + ch, () => youtubeFeed(ch)) }); } catch (e) { return json(res, 200, { list: [], error: e.message }); }
+      let l = []; try { l = await cachedFeed('yt' + ch, () => youtubeFeed(ch)); } catch (e) {} return json(res, 200, { list: await withPins('youtube', l) });
     }
     if (req.method === 'GET' && p === '/api/feed/blog') {
       const bu = String(new URL(req.url, 'http://x').searchParams.get('url') || '');
-      try { return json(res, 200, { list: await cachedFeed('bl' + bu, () => blogFeed(bu)) }); } catch (e) { return json(res, 200, { list: [], error: '블로그 글을 불러오지 못했어요' }); }
+      let l = []; try { l = await cachedFeed('bl' + bu, () => blogFeed(bu)); } catch (e) {} return json(res, 200, { list: await withPins('blog', l) });
     }
     if (req.method === 'GET' && p === '/api/feed/examples') {
       try { return json(res, 200, await examplesWithLikes()); } catch (e) { return json(res, 200, { list: [] }); }
