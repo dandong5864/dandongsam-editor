@@ -72,10 +72,12 @@ function showGone() {   // 편집기(서버)가 꺼졌을 때: 이유와 해결 
   const bg = E('div', ''), bx = E('div', '');
   bg.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center';
   bx.style.cssText = 'background:#1c1c22;border:1px solid #3a3a44;border-radius:16px;padding:30px 34px;max-width:460px;text-align:center;color:#fff;line-height:1.7';
-  bx.innerHTML = '<div style="font-size:42px">💤</div><div style="font-size:21px;font-weight:700;margin:6px 0 10px">자리를 너무 오래 비워 두셨어요</div><div style="font-size:16px;color:#cfd0d8">그동안 편집기가 쉬려고 꺼졌어요.<br>편집기를 다시 실행해 주세요.<br>작업하던 내용은 자동으로 저장되어 있어요.</div>';
+  bx.innerHTML = '<div style="font-size:42px">💤</div><div style="font-size:21px;font-weight:700;margin:6px 0 10px">자리를 너무 오래 비워 두셨어요</div><div style="font-size:16px;color:#cfd0d8">그동안 편집기가 쉬려고 꺼졌어요.<br>작업하던 내용은 자동으로 저장되어 있어요.<br><b style="color:#26d4c4">다시 연결할게요!</b></div>';
   const bt = E('button', 'primary bigbtn', '다시 연결하기'); bt.style.marginTop = '18px';
-  bt.onclick = () => { fetch('/api/ping').then((r) => { if (r.ok) location.reload(); else bt.textContent = '아직 꺼져 있어요 · 편집기를 다시 실행해 주세요'; }).catch(() => { bt.textContent = '아직 꺼져 있어요 · 편집기를 다시 실행해 주세요'; }); };
+  bt.onclick = () => { fetch('/api/ping').then((r) => { if (r.ok) location.reload(); else bt.textContent = '연결하는 중… 편집기를 다시 실행해 주세요'; }).catch(() => { bt.textContent = '연결하는 중… 편집기를 다시 실행해 주세요'; }); };
   bx.append(bt); bg.append(bx); document.body.append(bg); goneBox = bg;
+  const tryBack = () => fetch('/api/ping').then((r) => { if (r.ok) location.reload(); }).catch(() => {});   // 편집기가 다시 켜지면 저절로 이어져요
+  setInterval(tryBack, 2000); tryBack();
 }
 function toast(msg, action, ms = 3500) {
   if (/서버에 연결할 수 없어요/.test(msg)) return showGone();
