@@ -1195,10 +1195,11 @@ function renderPropsSel(p, s) {
     p.append(slider('세로 위치', -100, 100, 1, c.y, (v) => v + '%', (v) => { c.y = v; upd(); }, 0));
     const rw = E('div', 'chips');
     const b1 = E('button', 'chip', '⟳ 90° 회전'); b1.onclick = () => { push(); c.rot = ((c.rot || 0) + 90) % 360; changed(); };
-    const b2 = E('button', 'chip' + (c.flip ? ' on' : ''), '↔ 미러링'); b2.onclick = () => { push(); c.flip = !c.flip; changed(); };
-    const bR = E('button', 'chip' + (c.rev ? ' on' : ''), '⏪ 역방향'); bR.onclick = () => { push(); c.rev = !c.rev; changed(); seek(S.t, true); };
+    const b1r = E('button', 'chip on', '↺ 회전 해제'); b1r.onclick = () => { push(); c.rot = 0; changed(); };
+    const b2 = E('button', 'chip' + (c.flip ? ' on' : ''), c.flip ? '↔ 미러링 해제' : '↔ 미러링'); b2.onclick = () => { push(); c.flip = !c.flip; changed(); };
+    const bR = E('button', 'chip' + (c.rev ? ' on' : ''), c.rev ? '⏪ 역방향 해제' : '⏪ 역방향'); bR.onclick = () => { push(); c.rev = !c.rev; changed(); seek(S.t, true); };
     const b3 = E('button', 'chip', '가운데로'); b3.onclick = () => { push(); c.x = 0; c.y = 0; changed(); };
-    rw.append(b1, b2, bR, b3); p.append(rw);
+    rw.append(b1); if (c.rot) rw.append(b1r); rw.append(b2, bR, b3); p.append(rw);
     p.append(sec('잘라내기 (화면 비율로 크롭)'));
     p.append(chips([['none', '안 함'], ['square', '1:1 정사각'], ['9:16', '9:16']], c.crop || 'none', (v) => { push(); c.crop = v; if (v !== 'none' && c.cropPos === undefined) c.cropPos = 50; changed(); }));
     if (c.crop && c.crop !== 'none') p.append(slider('잘라낼 위치 (좌↔우)', 0, 100, 1, c.cropPos === undefined ? 50 : c.cropPos, (v) => v + '%', (v) => { c.cropPos = v; upd(); }, 50));

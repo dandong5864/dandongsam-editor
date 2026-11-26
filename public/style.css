@@ -560,3 +560,5 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .stkkey{display:flex;gap:8px;align-items:flex-start}.stksub{flex:none;width:74px;display:flex;flex-direction:column;gap:4px}.stksubbody{flex:1;min-width:0}
 .stksb{padding:10px 4px;border:1px solid var(--line,#34343c);border-radius:8px;background:#1d1d22;color:#a9a9b6;font-size:13px;font-weight:700;cursor:pointer}.stksb:hover{color:#fff}.stksb.on{background:#2d2d36;color:var(--accent,#26d4c4);border-color:var(--accent,#26d4c4)}
 .stkkey .stk-names{grid-template-columns:1fr!important}.stkkey .stk-name{height:40px;font-size:14px;padding:0 10px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.stkkey{flex-direction:column!important;gap:8px!important}.stksub{flex-direction:row!important;width:auto!important;gap:6px!important}.stksb{flex:1;padding:10px 6px!important}.stksubbody{width:100%}

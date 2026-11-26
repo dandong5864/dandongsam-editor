@@ -3,7 +3,9 @@ import os, sys
 S=2
 KEY=60*S; GAP=6*S; PAD=26*S
 F='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+CAP='/home/claude/VideoToolkit/public/fonts/Cafe24Supermagic-Bold.otf'
 def font(s,idx=1): return ImageFont.truetype(F,int(s*S),index=idx)
+def capfont(s): return ImageFont.truetype(CAP,int(s*S))
 rows=[
  [('~\n`',1),('1',1),('2',1),('3',1),('4',1),('5',1),('6',1),('7',1),('8',1),('9',1),('0',1),('_\n-',1),('+\n=',1),('Backspace',2)],
  [('Tab',1.5)]+[(c,1) for c in 'QWERTYUIOP']+[('{\n[',1),('}\n]',1),('|\n\\',1.5)],
@@ -15,7 +17,7 @@ rows=[
 cluster=[(0,0,'Delete'),(0,1,'Home'),(0,2,'End'),(3,1,'↑'),(4,0,'←'),(4,1,'↓'),(4,2,'→')]
 MAINW=15*KEY+14*GAP; CLW=3*KEY+2*GAP; SEP=int(0.6*KEY)
 def keyboard(hl, caption, out):
-    W=int(MAINW+SEP+CLW+2*PAD); H0=int(5*KEY+4*GAP+2*PAD); capf=font(44)
+    W=int(MAINW+SEP+CLW+2*PAD); H0=int(5*KEY+4*GAP+2*PAD); capf=capfont(46)
     H=H0+int(76*S)
     im=Image.new('RGBA',(W,H),(0,0,0,0))
     d=ImageDraw.Draw(im)
@@ -52,15 +54,15 @@ def keyboard(hl, caption, out):
     for r,c,lab in cluster:
         key(x0+c*(KEY+GAP),PAD+r*(KEY+GAP),KEY,lab,lab in hl)
     cd=ImageDraw.Draw(im); cy=H0+38*S
-    cd.text((W/2,cy),caption,font=capf,fill=(0,0,0,255),anchor='mm',stroke_width=6*S,stroke_fill=(255,255,255,255))
+    cd.text((W/2,cy),caption,font=capf,fill=(0,0,0,255),anchor='mm',stroke_width=7*S,stroke_fill=(255,255,255,255))
     cd.text((W/2,cy),caption,font=capf,fill=(0,0,0,255),anchor='mm')
-    OFF=10*S; SW=6*S   # 아래 글자와 같은 흰색, 같은 굵기(6) 테두리
+    OFF=10*S; SW=7*S   # 아래 글자와 같은 흰색, 같은 굵기(7) 테두리
     big=Image.new('RGBA',(W+2*OFF,H+2*OFF),(0,0,0,0)); bd=ImageDraw.Draw(big)
     bd.rounded_rectangle((OFF+4*S-SW,OFF+4*S-SW,OFF+W-4*S+SW,OFF+H0-6*S+SW),radius=26*S+SW,fill=(255,255,255,255))
     big.alpha_composite(im,(OFF,OFF)); im=big; W,H=im.size
     im=im.resize((W//S,H//S),Image.LANCZOS); im.save(out)
 def textsticker(label,out):
-    f=font(80); sw=10*S; pad=34*S
+    f=capfont(86); sw=14*S; pad=34*S
     tmp=Image.new('RGBA',(10,10)); bb=ImageDraw.Draw(tmp).textbbox((0,0),label,font=f,stroke_width=sw,anchor='la')
     w=bb[2]-bb[0]+2*pad; h=bb[3]-bb[1]+2*pad
     im=Image.new('RGBA',(w,h),(0,0,0,0)); d=ImageDraw.Draw(im); pos=(pad-bb[0],pad-bb[1])
