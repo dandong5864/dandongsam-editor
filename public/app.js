@@ -903,7 +903,10 @@ const zoomBy = (f) => setZoom(S.zoom * f);
 function fitAll() { layout(); if (!S.total) return; S.zoom = clamp((tlScroll.clientWidth - 80) / S.total, 2, 400); renderTL(); tlScroll.scrollLeft = 0; }
 tlScroll.addEventListener('wheel', (e) => {
   if (e.ctrlKey) { e.preventDefault(); const r = inner.getBoundingClientRect(); setZoom(S.zoom * (e.deltaY < 0 ? 1.15 : 0.87), (e.clientX - r.left) / S.zoom); }
-  else if (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { tlScroll.scrollLeft += e.deltaY; e.preventDefault(); }
+  else if (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {   // 트랙이 많아 세로로 넘치면 휠은 세로 스크롤, 안 넘치면 가로로 움직여요 (가로는 Shift+휠)
+    if (tlScroll.scrollHeight > tlScroll.clientHeight + 1) return;
+    tlScroll.scrollLeft += e.deltaY; e.preventDefault();
+  }
 }, { passive: false });
 
 /* ============ 타임라인 마우스 조작 ============ */
