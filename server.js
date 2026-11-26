@@ -1194,6 +1194,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/sample') return json(res, 200, await ensureSample());
     if (p === '/api/outdir' && req.method === 'GET') return json(res, 200, { dir: getOutDir() });
     if (p === '/api/pickdir' && req.method === 'POST') { const d = await pickDir(getOutDir()); return json(res, 200, { dir: d }); }
+    if (p === '/api/alive') return json(res, 200, { open: !!lastPing && Date.now() - lastPing < 15000 });
     if (p === '/api/ping') { lastPing = Date.now(); byeAt = 0; return json(res, 200, { ok: true }); }
     if (p === '/api/bye') { byeAt = Date.now(); res.writeHead(204); return res.end(); }
     if (req.method === 'GET' && p === '/api/caps') return json(res, 200, caps);
@@ -1294,7 +1295,12 @@ const caps = { ass: true };
 execFile(FFMPEG, ['-hide_banner', '-filters'], (e, so) => { if (!e) caps.ass = /\bass\b/.test(so); });
 
 server.on('error', (e) => {
-  if (e.code === 'EADDRINUSE') { console.log('이미 실행 중입니다. 열려 있는 창을 사용하세요.'); openApp(`http://localhost:${PORT}`); setTimeout(() => process.exit(0), 800); }
+  if (e.code === 'EADDRINUSE') {   // 이미 켜져 있으면: 창이 열려 있으면 새 창을 또 열지 않고, 창이 닫혀 있을 때만 다시 열어줘요
+    console.log('이미 실행 중입니다. 열려 있는 창을 사용하세요.');
+    const done = (open) => { if (!open) openApp(`http://localhost:${PORT}`); setTimeout(() => process.exit(0), 800); };
+    const rq = require('http').get({ host: '127.0.0.1', port: PORT, path: '/api/alive', timeout: 2000 }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => { let o = false; try { o = JSON.parse(b).open; } catch (er) {} done(o); }); });
+    rq.on('error', () => done(false)); rq.on('timeout', () => { rq.destroy(); done(false); });
+  }
   else { console.error(e); process.exit(1); }
 });
 server.listen(PORT, '127.0.0.1', () => {
