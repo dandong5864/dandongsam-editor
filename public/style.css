@@ -598,3 +598,4 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .hm-rank.r1{background:#ffd43b;color:#1a1500}.hm-rank.r2{background:#d0d4dc;color:#15171c}.hm-rank.r3{background:#e0915a;color:#1d0f05}
 #home .hm-h .hm-link+.hm-link{margin-left:-4px}
 .hm-sub{margin:-8px 0 14px;color:#c9a8ff;font-size:14px;font-weight:700}
+.brag-msg{white-space:pre-line;line-height:1.6;font-size:15px;color:#d8d8e0;margin:-4px 0 16px}
