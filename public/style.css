@@ -311,9 +311,10 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .hm-empty{grid-column:1/-1}
 
 .hm-wrap{max-width:none;padding:28px 4vw 60px}
-.hm-cols{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:8px}.hm-col{min-width:0}
+.hm-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:8px}.hm-col{min-width:0}
 .hm-top{grid-template-columns:3fr 1fr}
 .hm-grid.cards{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+@media(max-width:1280px){.hm-cols{grid-template-columns:1fr 1fr}.hm-cols>.hm-col:last-child{grid-column:1/-1}}
 @media(max-width:900px){.hm-cols{grid-template-columns:1fr}}
 
 .hm-th{position:relative;overflow:hidden;background:#1a1a20}
@@ -322,10 +323,11 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .hm-col{background:#17171d;border:1px solid #26262f;border-radius:20px;padding:0 20px 22px;overflow:hidden}
 .hm-h{margin:0 -20px 18px;padding:16px 20px;border-bottom:1px solid #26262f;gap:12px}
 .hm-h.yt{background:linear-gradient(90deg,rgba(255,64,64,.18),transparent 70%);box-shadow:inset 4px 0 0 #ff4040}
+.hm-h.ex{background:linear-gradient(90deg,rgba(176,124,255,.2),transparent 70%);box-shadow:inset 4px 0 0 #b07cff}
 .hm-h.lib{background:linear-gradient(90deg,rgba(37,214,196,.18),transparent 70%);box-shadow:inset 4px 0 0 #25d6c4}
 #home .hm-h h3{margin:0 auto 0 0;font-size:21px;font-weight:800;display:flex;align-items:center;gap:12px;letter-spacing:-.3px}
 #home .hm-h h3 i{font-style:normal;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:19px}
-.hm-h.yt h3 i{background:#ff4040;color:#fff}.hm-h.lib h3 i{background:#25d6c4;color:#04201c}
+.hm-h.yt h3 i{background:#ff4040;color:#fff}.hm-h.lib h3 i{background:#25d6c4;color:#04201c}.hm-h.ex h3 i{background:#b07cff;color:#fff}
 /* 제목 줄 슬림화: 큰 카드 박스 제거 */
 .hm-col{background:none;border:0;border-radius:0;padding:0;overflow:visible}
 .hm-h{margin:0 0 14px;padding:0 0 10px;border-bottom:2px solid #26262f;background:none!important;box-shadow:none!important;gap:10px}

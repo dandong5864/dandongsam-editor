@@ -917,6 +917,30 @@ async function blogFeed(blogUrl) {
   });
 }
 
+// ---- 홈 화면 "자동 편집 예시" 영상 목록 ----
+// 목록은 public/examples.json 하나만 고치면 돼요. 깃허브 main에 올리면 이미 설치한 편집기에도 10분 안에 반영돼요.
+const EX_URL = 'https://raw.githubusercontent.com/dandong5864/dandongsam-editor/main/public/examples.json';
+const ytId = (u) => { const m = /(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/.exec(String(u || '')); return m ? m[1] : (/^[\w-]{11}$/.test(String(u || '').trim()) ? String(u).trim() : ''); };
+async function examplesFeed() {
+  let cfg = null;
+  try { cfg = JSON.parse(await httpGet(EX_URL)); } catch (e) {}
+  if (!cfg) { try { cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'examples.json'), 'utf8')); } catch (e) { cfg = {}; } }
+  const list = [];
+  for (const v of (Array.isArray(cfg.videos) ? cfg.videos : [])) {
+    const it = typeof v === 'string' ? { url: v } : (v || {}); const id = ytId(it.url);
+    if (!id && !/^https?:\/\//i.test(it.url || '')) continue;
+    let title = it.title || '';
+    if (!title && id) { try { title = JSON.parse(await httpGet('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id))).title || ''; } catch (e) {} }
+    list.push({ title: title || '자동 편집 예시', url: id ? (/\/shorts\//.test(it.url) ? 'https://www.youtube.com/shorts/' + id : 'https://www.youtube.com/watch?v=' + id) : it.url, thumb: it.thumb || (id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : '') });
+  }
+  const pl = String(cfg.playlist || '').match(/(?:list=)?((?:PL|UU|OL|FL)[\w-]{10,})/);
+  if (pl) {
+    try { const xml = await httpGet('https://www.youtube.com/feeds/videos.xml?playlist_id=' + pl[1]); const re = /<entry>([\s\S]*?)<\/entry>/g; let m;
+      while ((m = re.exec(xml))) { const id = (/<yt:videoId>([^<]+)</.exec(m[1]) || [])[1]; const t = (/<title>([\s\S]*?)<\/title>/.exec(m[1]) || [])[1]; if (id && !list.some((x) => x.url.includes(id))) list.push({ title: xmlText(t), url: 'https://www.youtube.com/watch?v=' + id, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }); } } catch (e) {}
+  }
+  return { list: list.slice(0, 12), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || '') };
+}
+
 // ---- 음성 → 자막 (Whisper large-v3-turbo, 내 컴퓨터에서 실행) ----
 const STT_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin';
 const STT_DIR = path.join(WS, 'models'), STT_FILE = path.join(STT_DIR, 'ggml-large-v3-turbo-q5_0.bin'), STT_MIN = 400 * 1024 * 1024;
@@ -1136,6 +1160,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/feed/blog') {
       const bu = String(new URL(req.url, 'http://x').searchParams.get('url') || '');
       try { return json(res, 200, { list: await cachedFeed('bl' + bu, () => blogFeed(bu)) }); } catch (e) { return json(res, 200, { list: [], error: '블로그 글을 불러오지 못했어요' }); }
+    }
+    if (req.method === 'GET' && p === '/api/feed/examples') {
+      try { return json(res, 200, await cachedFeed('ex', examplesFeed)); } catch (e) { return json(res, 200, { list: [] }); }
     }
     // ---- 새 버전 알림 · 자동 업데이트 (GitHub 릴리스) ----
     if (req.method === 'GET' && p === '/api/version') return json(res, 200, { version: APP_VER });

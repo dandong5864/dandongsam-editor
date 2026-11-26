@@ -2141,7 +2141,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         x.onclick = async (ev) => { ev.stopPropagation(); if (!(await ask(`'${p.name}' 동영상을 삭제할까요?\n되돌릴 수 없어요. 가져온 영상 파일은 지워지지 않아요`, { danger: true, ok: '삭제' }))) return; await fetch('/api/project?id=' + p.id, { method: 'DELETE' }); if (curProj && curProj.id === p.id) curProj = null; w.remove(); if (!pl.children.length) pl.append(E('div', 'hm-empty', '아직 저장한 동영상이 없어요. 편집 중에 💾 저장을 눌러 보세요.')); };
         w.append(c, x); pl.append(w); });
     });
-    const cols = E('div', 'hm-cols'); wrap.append(cols); const yc = E('div', 'hm-col'), bc = E('div', 'hm-col'); cols.append(yc, bc);
+    const cols = E('div', 'hm-cols'); wrap.append(cols); const yc = E('div', 'hm-col'), bc = E('div', 'hm-col'), xc = E('div', 'hm-col'); cols.append(yc, bc, xc);
     // 유튜브
     const yh = E('div', 'hm-h yt'); yh.append(E('h3', '', '<i>▶</i>단동샘 유튜브')); const yb = E('button', 'hm-link', '채널 열기 ↗'); yb.onclick = () => open('https://www.youtube.com/channel/' + YT); yh.append(yb); yc.append(yh);
     const yg = E('div', 'hm-grid cards'); yc.append(yg); yg.append(E('div', 'hm-empty', '불러오는 중…'));
@@ -2156,6 +2156,13 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const f = E('div', 'hm-setblog'); const i = E('input'); i.type = 'text'; i.placeholder = '자료실(블로그) 주소 (예: https://내블로그.blogspot.com)'; i.onkeydown = (e) => e.stopPropagation();
       const ok = E('button', 'primary', '저장'); ok.onclick = () => { const v = i.value.trim(); if (!v) return; setLinks({ blog: v }); show(); }; f.append(i, ok); bg.append(f);
     } else { bg.append(E('div', 'hm-empty', '불러오는 중…')); fetch('/api/feed/blog?url=' + encodeURIComponent(bu)).then((r) => r.json()).catch(() => ({ list: [] })).then((r) => cardList('블로그', bu, r.list || [], bg)); }
+    // 자동 편집 예시 영상 (목록: public/examples.json)
+    const xh = E('div', 'hm-h ex'); xh.append(E('h3', '', '<i>✨</i>자동 편집 예시')); xc.append(xh);
+    const xg = E('div', 'hm-grid cards'); xc.append(xg); xg.append(E('div', 'hm-empty', '불러오는 중…'));
+    fetch('/api/feed/examples').then((r) => r.json()).catch(() => ({ list: [] })).then((r) => {
+      if (r.more) { const xb = E('button', 'hm-link', '전체 보기 ↗'); xb.onclick = () => open(r.more); xh.append(xb); }
+      const l = r.list || []; if (l.length) cardList('예시', '', l, xg); else { xg.innerHTML = ''; xg.append(E('div', 'hm-empty', '예시 영상을 준비하고 있어요.')); }
+    });
     document.body.append(el);
   }
   window.__home = show;
