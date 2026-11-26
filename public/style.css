@@ -589,3 +589,11 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .stkkey .stksb.on{background:var(--accent)!important;color:#06201d!important}
 .stkkey .stksubbody{padding-top:12px;border-top:1px solid var(--line,#34343c)}
 .tplpick{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+
+/* 예시 영상: 좋아요 · 순위 */
+.hm-exw{position:relative;display:flex;flex-direction:column}.hm-exw>.hm-card{flex:1}
+.hm-like{position:absolute;top:8px;right:8px;z-index:2;width:38px;height:38px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.hm-like:hover{background:rgba(0,0,0,.75)}.hm-like.on{color:#ff4d6d}
+.hm-rank{position:absolute;top:8px;left:8px;z-index:2;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:800;background:#3a3a46;color:#fff}
+.hm-rank.r1{background:#ffd43b;color:#1a1500}.hm-rank.r2{background:#d0d4dc;color:#15171c}.hm-rank.r3{background:#e0915a;color:#1d0f05}
+#home .hm-h .hm-link+.hm-link{margin-left:-4px}

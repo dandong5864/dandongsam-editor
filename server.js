@@ -1005,6 +1005,39 @@ function parseCsv(t) {
     else if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; } else cur += c; }
   if (cur || row.length) { row.push(cur); rows.push(row); } return rows;
 }
+// ---- 예시 영상 좋아요 · 자랑하기 (구글 설문지로 보내고, 응답 시트로 모아요) ----
+let exCfg = null; const lkCache = { t: 0, v: {} };
+const vkey = (u) => ytId(u) || String(u || '').trim();
+const LIKE_FILE = () => path.join(DATA_ROOT, 'likes.json');
+const myLikes = () => { try { return JSON.parse(fs.readFileSync(LIKE_FILE(), 'utf8')) || {}; } catch (e) { return {}; } };
+const formPostUrl = (u) => { const m = /\/forms\/d\/e\/([\w-]+)/.exec(String(u || '')); return m ? `https://docs.google.com/forms/d/e/${m[1]}/formResponse` : ''; };
+function httpPostForm(url, fields) {
+  const body = new URLSearchParams(fields).toString();
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, { method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0 DandongsamEditor', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }, timeout: 10000 }, (r) => {
+      r.resume(); (r.statusCode >= 200 && r.statusCode < 400) ? resolve(r.statusCode) : reject(new Error('HTTP ' + r.statusCode)); });
+    req.on('timeout', () => req.destroy(new Error('timeout'))); req.on('error', reject); req.end(body);
+  });
+}
+// 좋아요 시트의 "영상" 칸을 세어요. "-영상키"는 좋아요 취소예요
+async function likeCounts() {
+  const sh = exCfg && exCfg.like && exCfg.like.sheet; if (!sh) return {};
+  if (Date.now() - lkCache.t < 2 * 60 * 1000) return lkCache.v;
+  const c = {};
+  try { const rows = parseCsv(await httpGet(sheetCsvUrl(sh), 5)); rows.shift();
+    for (const r of rows) { const v = String(r[1] || '').trim(); if (!v) continue; const neg = v[0] === '-', k = neg ? v.slice(1) : v; c[k] = (c[k] || 0) + (neg ? -1 : 1); }
+    lkCache.t = Date.now(); lkCache.v = c; } catch (e) { return lkCache.v; }
+  return c;
+}
+async function examplesWithLikes() {
+  const base = await cachedFeed('ex', examplesFeed); const cnt = await likeCounts(); const mine = myLikes();
+  const items = base.list.map((it, i) => { const k = vkey(it.url); return { ...it, key: k, n: Math.max(0, cnt[k] || 0), liked: !!mine[k], i }; });
+  items.sort((a, b) => b.n - a.n || a.i - b.i);
+  let rank = 0, prev = -1; items.forEach((it) => { if (it.n > 0) { if (it.n !== prev) { rank++; prev = it.n; } it.rank = rank; } });
+  const lk = exCfg && exCfg.like || {}, sd = exCfg && exCfg.send || {};
+  return { form: base.form, more: base.more, canLike: !!(formPostUrl(lk.form) && lk.video), canSend: !!(formPostUrl(sd.form || base.form) && sd.link),
+    list: items.slice(0, 12).map(({ n, i, ...x }) => x) };   // 숫자는 보내지 않고 순위만 보내요
+}
 async function examplesFeed() {
   let cfg = null;
   try { cfg = JSON.parse(await httpGet(EX_URL)); } catch (e) {}
@@ -1052,7 +1085,8 @@ async function examplesFeed() {
       while ((m = re.exec(xml))) { const id = (/<yt:videoId>([^<]+)</.exec(m[1]) || [])[1]; const t = (/<title>([\s\S]*?)<\/title>/.exec(m[1]) || [])[1]; if (id && !list.some((x) => x.url.includes(id))) list.push({ title: xmlText(t), url: 'https://www.youtube.com/watch?v=' + id, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }); } } catch (e) {}
   }
   const form = /^https:\/\/(docs\.google\.com\/forms|forms\.gle)\//.test(String(cfg.form || '')) ? cfg.form : '';
-  return { form, list: list.slice(0, 12), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || [].concat(cfg.page || [])[0] || '') };
+  exCfg = cfg;
+  return { form, list: list.slice(0, 24), more: pl ? 'https://www.youtube.com/playlist?list=' + pl[1] : (cfg.more || [].concat(cfg.page || [])[0] || '') };
 }
 
 // ---- 음성 → 자막 (Whisper large-v3-turbo, 내 컴퓨터에서 실행) ----
@@ -1277,7 +1311,27 @@ const server = http.createServer(async (req, res) => {
       try { return json(res, 200, { list: await cachedFeed('bl' + bu, () => blogFeed(bu)) }); } catch (e) { return json(res, 200, { list: [], error: '블로그 글을 불러오지 못했어요' }); }
     }
     if (req.method === 'GET' && p === '/api/feed/examples') {
-      try { return json(res, 200, await cachedFeed('ex', examplesFeed)); } catch (e) { return json(res, 200, { list: [] }); }
+      try { return json(res, 200, await examplesWithLikes()); } catch (e) { return json(res, 200, { list: [] }); }
+    }
+    if (req.method === 'POST' && p === '/api/examples/like') {
+      const b = await readBody(req); const k = String(b.key || '').trim().slice(0, 300); if (!k) return json(res, 400, { error: '영상을 찾을 수 없어요' });
+      if (!exCfg) { try { await cachedFeed('ex', examplesFeed); } catch (e) {} }
+      const lk = (exCfg && exCfg.like) || {}, u = formPostUrl(lk.form); if (!u || !lk.video) return json(res, 200, { error: '좋아요를 아직 쓸 수 없어요' });
+      const mine = myLikes(), on = !!b.on; if (!!mine[k] === on) return json(res, 200, { ok: true, liked: on });
+      try { await httpPostForm(u, { [lk.video]: (on ? '' : '-') + k }); } catch (e) { return json(res, 200, { error: '인터넷 연결을 확인해 주세요' }); }
+      if (on) mine[k] = Date.now(); else delete mine[k];
+      try { fs.mkdirSync(DATA_ROOT, { recursive: true }); fs.writeFileSync(LIKE_FILE(), JSON.stringify(mine)); } catch (e) {}
+      return json(res, 200, { ok: true, liked: on });
+    }
+    if (req.method === 'POST' && p === '/api/examples/send') {
+      const b = await readBody(req); const link = String(b.link || '').trim();
+      if (!ytId(link) && !/^https?:\/\/\S+\.(mp4|webm|mov)(\?\S*)?$/i.test(link)) return json(res, 200, { error: '유튜브 영상 링크를 붙여 넣어 주세요' });
+      if (!exCfg) { try { await cachedFeed('ex', examplesFeed); } catch (e) {} }
+      const sd = (exCfg && exCfg.send) || {}, u = formPostUrl(sd.form || exCfg && exCfg.form); if (!u || !sd.link) return json(res, 200, { error: '지금은 보낼 수 없어요' });
+      if (Date.now() - (global.__lastSend || 0) < 20000) return json(res, 200, { error: '잠시 후에 다시 보내 주세요' });
+      const f = { [sd.link]: link }; if (sd.name && b.name) f[sd.name] = String(b.name).trim().slice(0, 40); if (sd.title && b.title) f[sd.title] = String(b.title).trim().slice(0, 100);
+      try { await httpPostForm(u, f); } catch (e) { return json(res, 200, { error: '보내지 못했어요. 인터넷 연결을 확인해 주세요' }); }
+      global.__lastSend = Date.now(); return json(res, 200, { ok: true });
     }
     // ---- 새 버전 알림 · 자동 업데이트 (GitHub 릴리스) ----
     if (req.method === 'GET' && p === '/api/version') return json(res, 200, { version: APP_VER });

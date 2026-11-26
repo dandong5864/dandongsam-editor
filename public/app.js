@@ -2248,15 +2248,40 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const f = E('div', 'hm-setblog'); const i = E('input'); i.type = 'text'; i.placeholder = '자료실(블로그) 주소 (예: https://내블로그.blogspot.com)'; i.onkeydown = (e) => e.stopPropagation();
       const ok = E('button', 'primary', '저장'); ok.onclick = () => { const v = i.value.trim(); if (!v) return; setLinks({ blog: v }); show(); }; f.append(i, ok); bg.append(f);
     } else { bg.append(E('div', 'hm-empty', '불러오는 중…')); fetch('/api/feed/blog?url=' + encodeURIComponent(bu)).then((r) => r.json()).catch(() => ({ list: [] })).then((r) => cardList('블로그', bu, r.list || [], bg)); }
-    // 자동 편집 예시 영상 (목록: public/examples.json)
+    // 자동 편집 예시 영상 (목록: public/examples.json) — 좋아요 많은 순서로, 숫자 없이 순위만 보여 줘요
     const xh = E('div', 'hm-h ex'); xh.append(E('h3', '', '<i>✨</i>자동 편집 예시')); xc.append(xh);
     const xg = E('div', 'hm-grid cards'); xc.append(xg); xg.append(E('div', 'hm-empty', '불러오는 중…'));
     fetch('/api/feed/examples').then((r) => r.json()).catch(() => ({ list: [] })).then((r) => {
+      if (r.canSend || r.form) { const fb = E('button', 'hm-link', '🙌 내 영상 자랑하기'); fb.title = '자동 편집으로 만든 영상 링크를 보내 주세요'; fb.onclick = () => (r.canSend ? brag() : open(r.form)); xh.append(fb); }
       if (r.more) { const xb = E('button', 'hm-link', '전체 보기 ↗'); xb.onclick = () => open(r.more); xh.append(xb); }
-      if (r.form) { const fb = E('button', 'hm-link', '내 영상 보내기 ↗'); fb.title = '자동 편집으로 만든 영상 링크를 보내 주세요'; fb.onclick = () => open(r.form); xh.append(fb); }
-      const l = r.list || []; if (l.length) cardList('예시', '', l, xg); else { xg.innerHTML = ''; xg.append(E('div', 'hm-empty', '예시 영상을 준비하고 있어요.')); }
+      xg.innerHTML = ''; const l = r.list || [];
+      if (!l.length) { xg.append(E('div', 'hm-empty', '예시 영상을 준비하고 있어요.')); return; }
+      l.forEach((it) => {
+        const w = E('div', 'hm-exw'); const c = E('button', 'hm-card');
+        c.innerHTML = `<div class="hm-th" style="${it.thumb ? `--im:url('${esc(it.thumb)}')` : ''}">${it.rank ? `<span class="hm-rank r${Math.min(it.rank, 4)}">${it.rank}위</span>` : ''}</div><div class="hm-tt">${esc(it.title)}</div>`;
+        c.onclick = () => open(it.url); w.append(c);
+        if (r.canLike) {
+          const h = E('button', 'hm-like' + (it.liked ? ' on' : ''), it.liked ? '♥' : '♡'); h.title = it.liked ? '좋아요 취소' : '좋아요';
+          h.onclick = async (ev) => { ev.stopPropagation(); if (h.disabled) return; h.disabled = true; const on = !h.classList.contains('on');
+            const z = await fetch('/api/examples/like', { method: 'POST', body: JSON.stringify({ key: it.key, on }) }).then((x) => x.json()).catch(() => ({ error: '인터넷 연결을 확인해 주세요' }));
+            h.disabled = false; if (z.error) return toast(z.error); h.classList.toggle('on', z.liked); h.textContent = z.liked ? '♥' : '♡'; h.title = z.liked ? '좋아요 취소' : '좋아요'; if (z.liked) toast('좋아요를 눌렀어요. 순위는 잠시 뒤에 바뀌어요'); };
+          w.append(h);
+        }
+        xg.append(w);
+      });
     });
     document.body.append(el);
+  }
+  // 내 영상 자랑하기: 링크만 붙여 넣으면 바로 보내져요 (단동샘이 확인한 뒤 예시 칸에 올라가요)
+  function brag() {
+    const d = E('div', 'dlg', '<h2>🙌 내 영상 자랑하기</h2>');
+    const fld = (lb, ph) => { const f = E('div', 'f'); f.append(E('label', '', lb)); const i = E('input'); i.type = 'text'; i.placeholder = ph; i.onkeydown = (e) => e.stopPropagation(); f.append(i); d.append(f); return i; };
+    const li = fld('영상 링크', 'https://youtu.be/…'), ti = fld('제목', '안 써도 돼요 (비우면 유튜브 제목)'), ni = fld('이름', '안 써도 돼요');
+    const a2 = E('div', 'acts'); const c = E('button', '', '취소'); c.onclick = closeModal; const ok = E('button', 'primary', '보내기');
+    ok.onclick = async () => { if (!li.value.trim()) { li.focus(); return toast('영상 링크를 붙여 넣어 주세요'); } ok.disabled = true;
+      const z = await fetch('/api/examples/send', { method: 'POST', body: JSON.stringify({ link: li.value, title: ti.value, name: ni.value }) }).then((x) => x.json()).catch(() => ({ error: '서버에 연결할 수 없어요' }));
+      ok.disabled = false; if (z.error) return toast(z.error); closeModal(); toast('보냈어요! 확인한 뒤 예시 칸에 올라가요'); };
+    a2.append(c, ok); d.append(a2); openModal(d); li.focus();
   }
   window.__home = show;
   $('.brand').style.cursor = 'pointer'; $('.brand').title = '홈 화면'; $('.brand').onclick = show;
