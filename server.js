@@ -1244,6 +1244,11 @@ const server = http.createServer(async (req, res) => {
       await pipeline(req, fs.createWriteStream(dest));
       return json(res, 200, { ok: true, id: nm });
     }
+    if (p === '/api/sticker/delete' && req.method === 'POST') {
+      const f = path.join(STICKER_DIR, path.basename(u.searchParams.get('n') || '')); if (!fs.existsSync(f)) return json(res, 404, { error: '없는 스티커예요' });
+      try { fs.unlinkSync(f); } catch (e) { return json(res, 500, { error: '지우지 못했어요' }); }
+      return json(res, 200, { ok: true });
+    }
     if (p === '/api/sticker/file' && req.method === 'GET') {
       const f = path.join(STICKER_DIR, path.basename(u.searchParams.get('n') || '')); if (!fs.existsSync(f)) { res.writeHead(404); return res.end(); }
       return serveFile(req, res, f);
