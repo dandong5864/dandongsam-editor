@@ -40,6 +40,7 @@ try { media = JSON.parse(fs.readFileSync(DB, 'utf8')); } catch (e) {}
 for (const id of Object.keys(media)) {
   const m = media[id];
   for (const k of Object.keys(m)) { if (typeof m[k] === 'string' && /[\\/]workspace[\\/]/.test(m[k])) { const rest = m[k].split(/[\\/]workspace[\\/]/).pop(); m[k] = path.join(WS, rest); } }
+  if (m.lite && !fs.existsSync(m.lite)) delete m.lite;
   if (!fs.existsSync(m.file)) delete media[id];
 }
 const saveDB = () => fs.writeFileSync(DB, JSON.stringify(media));
@@ -97,6 +98,26 @@ function needsProxy(info, ext) {
   }
   return !['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'].includes(ext);
 }
+// 큰 영상(1080p 넘음, 30프레임 넘음)은 미리보기만 가벼운 사본으로 보여 줘요. 내보내기는 항상 원본으로 해요.
+function isHeavy(info) {
+  if (!info || !info.hasVideo || info.isImage) return false;
+  const w = info.width || 0, h = info.height || 0;
+  return Math.max(w, h) > 1920 || Math.min(w, h) > 1080 || (info.fps || 0) > 31;
+}
+const proxyVf = (info) => "scale='trunc(iw*sar/2)*2':ih,setsar=1,scale='if(gte(iw,ih),-2,min(1080,iw))':'if(gte(iw,ih),min(1080,ih),-2)'" + ((info.fps || 0) > 31 ? ',fps=30' : '');
+const proxyArgs = (file, info, out) => ['-y', '-i', file, '-vf', proxyVf(info), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out];
+// 가벼운 사본은 뒤에서 하나씩 만들어요 (가져오기는 바로 끝나고, 다 만들어지면 그때부터 사본으로 재생)
+let liteQ = Promise.resolve();
+function makeLite(id, file, info) {
+  liteQ = liteQ.then(async () => {
+    if (!fs.existsSync(file)) return;
+    const out = path.join(DIRS.cache, id + '.lite.mp4'), tmp = path.join(DIRS.cache, id + '.lite.part.mp4');
+    try {
+      await run(FFMPEG, proxyArgs(file, info, tmp)); fs.renameSync(tmp, out);
+      if (media[id]) { media[id].lite = out; saveDB(); } else fs.unlinkSync(out);
+    } catch (e) { try { fs.unlinkSync(tmp); } catch (e2) {} }
+  });
+}
 
 // 소리 파형(0.1초 단위 최대 진폭)
 function peaks(file) {
@@ -145,12 +166,10 @@ async function ingest(id, name, file, ext) {
   }
   if (needsProxy(info, ext)) {
     const px = path.join(DIRS.cache, id + (info.hasVideo ? '.proxy.mp4' : '.proxy.mp3'));
-    const args = info.hasVideo
-      ? ['-y', '-i', file, '-vf', "scale='trunc(iw*sar/2)*2':ih,setsar=1,scale=-2:'min(1080,ih)'", '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', px]
-      : ['-y', '-i', file, '-vn', '-c:a', 'libmp3lame', '-b:a', '160k', px];
+    const args = info.hasVideo ? proxyArgs(file, info, px) : ['-y', '-i', file, '-vn', '-c:a', 'libmp3lame', '-b:a', '160k', px];
     await run(FFMPEG, args);
     m.preview = px;
-  }
+  } else if (isHeavy(m)) makeLite(id, file, info);
   return m;
 }
 async function handleRecord(req, res, q) {
@@ -257,7 +276,7 @@ function listFonts() {
 }
 const pubFonts = () => listFonts().map(({ path: _p, ...r }) => r);
 
-const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), color: m.color || null, hide: !!m.hide });
+const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, lite: !!m.lite, liteWait: !m.lite && !m.preview && isHeavy(m), isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), color: m.color || null, hide: !!m.hide });
 
 // ---- 파일 스트리밍(Range 지원) ----
 function serveFile(req, res, file, type) {
@@ -1082,6 +1101,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && (m = /^\/media\/(\w+)$/.exec(p))) {
       const it = media[m[1]]; if (!it) { res.writeHead(404); return res.end(); }
       if (u.searchParams.get('a') && hasAlpha(it)) return serveFile(req, res, alphaPathOf(it.id), 'video/webm');
+      if (u.searchParams.get('lite') && it.lite && fs.existsSync(it.lite)) return serveFile(req, res, it.lite, 'video/mp4');
       return serveFile(req, res, it.preview || it.file);
     }
     if (req.method === 'GET' && (m = /^\/api\/thumb\/(\w+)$/.exec(p))) {
@@ -1096,7 +1116,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE' && (m = /^\/api\/media\/(\w+)$/.exec(p))) {
       const it = media[m[1]];
       if (it) {
-        [it.file, it.thumb, it.preview, path.join(DIRS.cache, it.id + '.peaks.json')].forEach((f) => { try { f && fs.unlinkSync(f); } catch (e) {} });
+        [it.file, it.thumb, it.preview, it.lite, path.join(DIRS.cache, it.id + '.peaks.json')].forEach((f) => { try { f && fs.unlinkSync(f); } catch (e) {} });
         delete media[m[1]]; saveDB();
       }
       return json(res, 200, { ok: true });
@@ -1403,6 +1423,7 @@ server.on('error', (e) => {
   else { console.error(e); process.exit(1); }
 });
 server.listen(PORT, '127.0.0.1', () => {
+  for (const m of Object.values(media)) if (!m.lite && !m.preview && isHeavy(m)) makeLite(m.id, m.file, m);   // 예전에 가져온 큰 영상도 가벼운 사본을 만들어 둬요
   const url = `http://localhost:${PORT}`;
   console.log('==============================================');
   console.log('  단동샘 편집기 실행 중  →  ' + url);

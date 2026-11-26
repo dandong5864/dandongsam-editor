@@ -146,7 +146,7 @@ function initAudio() {
   } catch (e) { actx = null; }
 }
 const setGain = (c) => { const v = (c.mute || c.rev || tf('v').m) ? 0 : c.vol / 100; if (gainNode) gainNode.gain.value = v; else { video.volume = clamp(v, 0, 1); } };
-const mediaUrl = (id) => '/media/' + id;
+const mediaUrl = (id) => '/media/' + id + ((S.media[id] || {}).lite ? '?lite=1' : '');   // 큰 영상은 가벼운 미리보기 사본으로
 
 function ensureSrc(c) {
   return new Promise((res) => {
@@ -325,7 +325,7 @@ function syncPip() {
     if (x.kind !== 'pip') return;
     let el = pipEls[x.id]; const on = S.t >= x.start - 1e-6 && S.t < x.end && !tf('p').h;
     if (!on) { if (el && el.style.display !== 'none') { el.pause(); el.style.display = 'none'; } return; }
-    if (!el) { el = pipEls[x.id] = document.createElement('video'); el.playsInline = true; el.preload = 'auto'; el.src = mediaUrl(x.mediaId) + ((S.media[x.mediaId] || {}).hasAlpha ? '?a=1' : ''); el.style.cssText = 'position:absolute;object-fit:fill;pointer-events:none'; pipbox.append(el); }
+    if (!el) { el = pipEls[x.id] = document.createElement('video'); el.playsInline = true; el.preload = 'auto'; el.src = (S.media[x.mediaId] || {}).hasAlpha ? '/media/' + x.mediaId + '?a=1' : mediaUrl(x.mediaId); el.style.cssText = 'position:absolute;object-fit:fill;pointer-events:none'; pipbox.append(el); }
     const w = x.w / 100 * W, h = x.h / 100 * W;
     el.style.zIndex = (x.lane || 0) + 1; el.style.display = 'block'; el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (x.x / 100 * W - w / 2) + 'px'; el.style.top = (x.y / 100 * H - h / 2) + 'px';
     el.style.opacity = (x.opacity == null ? 100 : x.opacity) / 100; el.volume = tf('p').m ? 0 : clamp((x.vol == null ? 100 : x.vol) / 100, 0, 1);
@@ -485,7 +485,12 @@ function drawBg() {
   const k = Math.max(w / sw, h / sh), dw = sw * k, dh = sh * k;
   try { bgc.getContext('2d').drawImage(video, sx, sy, sw, sh, (w - dw) / 2, (h - dh) / 2, dw, dh); } catch (e) {}
 }
-(function bgLoop() { drawBg(); requestAnimationFrame(bgLoop); })();
+let bgSig = '';
+(function bgLoop() {   // 흐림 배경은 재생 중이거나 화면이 바뀌었을 때만 다시 그려요 (멈춰 있을 때 컴퓨터가 쉬도록)
+  const sig = S.bg + '|' + tplOn() + '|' + (cur ? cur.mediaId + ':' + cur.crop + ':' + cur.cropPos : '') + '|' + video.currentTime + '|' + video.videoWidth + '|' + stage.clientWidth + 'x' + stage.clientHeight;
+  if (playing || reverse || sig !== bgSig) { bgSig = sig; drawBg(); }
+  requestAnimationFrame(bgLoop);
+})();
 
 const activeTexts = () => S.texts.filter((x) => S.t >= x.start - 1e-6 && S.t < x.end && !tf(trkOfText(x)).h);
 let ovKey = '';
@@ -1786,6 +1791,15 @@ let pingFail = 0; const ping = () => fetch('/api/ping').then(() => { pingFail = 
 setInterval(ping, 5000); ping();
 addEventListener('focus', ping); document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
 addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } catch (e) {} });
+
+/* 큰 영상의 가벼운 미리보기 사본이 다 만들어지면 알아서 바꿔 써요 */
+setInterval(async () => {
+  if (!Object.values(S.media).some((m) => m.liteWait)) return;
+  try {
+    const l = await fetch('/api/media').then((r) => r.json());
+    l.forEach((m) => { const o = S.media[m.id]; if (o && o.liteWait && !m.liteWait) { o.lite = m.lite; o.liteWait = false; } });
+  } catch (e) {}
+}, 8000);
 
 /* ============ 시작 ============ */
 (async () => {
