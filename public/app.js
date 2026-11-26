@@ -1146,11 +1146,6 @@ function bgControls(p) {
   const cl = myCards(); if (cl.length) { const col = E('div', 'tplcol'); cl.forEach((c, i) => { const r = E('div', 'tplrow'), bt = E('button', 'tplpick', '⭐ ' + esc(c.n)); bt.onclick = () => addCard(c); const dx = E('button', 'tpldel', '×'); dx.title = '삭제'; dx.onclick = () => { const l = myCards(); l.splice(i, 1); saveMyCards(l); buildLeft(); }; r.append(bt, dx); col.append(r); }); p.append(col); }
   const cr = E('div', 'savetpl'), cn = E('input'); cn.type = 'text'; cn.placeholder = '이름 (예: 우리 채널 단계 화면)'; cn.maxLength = 20; cn.onkeydown = (e) => e.stopPropagation();
   const cb = E('button', 'primary', '＋ 저장'); cb.onclick = () => { const n = cn.value.trim(); if (!n) return toast('이름을 적어 주세요'); saveCard(n); buildLeft(); }; cr.append(cn, cb); p.append(cr);
-  p.append(sec('배경'));
-  const sw = E('div', 'bgsw'); ['#1f6feb', '#ffffff', '#000000', '#ff2d92', '#FFFD00', '#00C48C', '#ff9500', '#8e44ff'].forEach((c) => { const b = E('button', 'bgsw-b'); b.style.background = c; b.title = c; b.onclick = () => addBg(c); sw.append(b); }); p.append(sw);
-  const ab = E('button', 'primary bigbtn', '＋ 배경 추가'); ab.onclick = () => addBg(); p.append(ab);
-  const bl = S.texts.filter((x) => x.kind === 'bg').sort((a, b) => a.start - b.start);
-  if (bl.length) { p.append(sec('넣은 배경')); bl.forEach((x) => { const r = E('div', 'titem' + (isSel('t', x.id) ? ' sel' : '')); const dot = E('span', 'bgdot'); dot.style.background = x.color || '#1f6feb'; r.append(E('span', 'tm', fmt(x.start, 1)), dot, E('span', 'tx', '배경')); r.onclick = () => { select('t', x.id); seek(x.start + 0.01); }; p.append(r); }); }
   if (S.canvas !== '9:16') return;
   p.append(sec('위·아래 띠'));
   const bc = chips([['none', '🚫 없음'], ['tpl', '위·아래 띠']], tplOn() ? 'tpl' : 'none', (v) => { push(); if (v === 'tpl') { S.tpl = S.tpl || { ...TPLS[0].v }; } else { S.tpl = null; S.bg = 'none'; } changed(); });
