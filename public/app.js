@@ -1411,7 +1411,8 @@ function buildSubPane(d) {
     d.append(E('h4', '', `자막 목록 (${S.texts.filter((x) => x.kind === 'sub').length}개)`));
     const ss = S.texts.filter((x) => x.kind === 'sub').sort((p, q) => p.start - q.start); if (!ss.length) d.append(E('div', 'hint', '아직 없어요')); ss.forEach((x) => d.append(subRow(x)));
 }
-let stkSec = 'shape';
+let stkSec = 'shape', stkSub = 'kbd';
+const STK_ORDER = ['복사', '붙여넣기', '잘라내기', '되돌리기', '다시 실행', '저장', '전체 선택', '찾기', '새로 만들기', '인쇄', '화면 캡처', '바탕화면 보기', '재생 일시정지', '분할', '모든 트랙 분할', '앞부분 삭제', '뒷부분 삭제', '클립 삭제', '다시 실행 2', '속성 복사', '속성 붙여넣기', '1프레임 이동', '10프레임 이동', '이전 다음 컷', '처음으로', '끝으로', '선택 모드', '클릭 자르기 모드', '뒤로 감기', '멈춤', '빠르게 감기', '타임라인 전체 보기', '타임라인 확대', '타임라인 축소', '음량 올리기', '음량 내리기', '현재 장면 캡처', '내보내기', '줄바꿈'];
 function buildLeft() {
   const b = $('#lbody'); b.innerHTML = '';
   if (ltab === 'media') {
@@ -1440,8 +1441,16 @@ function buildLeft() {
       nb.onclick = () => { stkSec = k; Object.keys(secs).forEach((q) => { secs[q].style.display = q === k ? '' : 'none'; }); nav.querySelectorAll('.stknb').forEach((x) => x.classList.toggle('on', x.dataset.k === k)); };
       nav.append(nb); d.append(w); return { w, nb };
     };
-    const sShape = mkSec('shape', '도형'), sKbd = mkSec('kbd', '키보드형\n단축키'), sTxt = mkSec('txt', '텍스트형\n단축키'), sMine = mkSec('mine', '내 이미지'), sUsed = mkSec('used', '넣은 스티커');
-    sMine.nb.style.display = 'none'; sKbd.nb.style.display = sTxt.nb.style.display = 'none'; if (!ss.length) sUsed.nb.style.display = 'none';
+    const sShape = mkSec('shape', '도형'), sKey = mkSec('key', '단축키'), sMine = mkSec('mine', '내 이미지'), sUsed = mkSec('used', '넣은 스티커');
+    sMine.nb.style.display = 'none'; sKey.nb.style.display = 'none'; if (!ss.length) sUsed.nb.style.display = 'none';
+    if (stkSec === 'kbd' || stkSec === 'txt') stkSec = 'key';
+    const kg = E('div', 'stk-grid stk-names'), tg = E('div', 'stk-grid stk-names');
+    const subn = E('div', 'stksub'), subb = E('div', 'stksubbody'), ksub = {};
+    [['kbd', '키보드형', kg], ['txt', '텍스트형', tg]].forEach(([k, lb, gr]) => {
+      const bt = E('button', 'stksb' + (stkSub === k ? ' on' : ''), lb); bt.onclick = () => { stkSub = k; kg.style.display = k === 'kbd' ? '' : 'none'; tg.style.display = k === 'txt' ? '' : 'none'; subn.querySelectorAll('.stksb').forEach((q) => q.classList.toggle('on', q === bt)); }; subn.append(bt); ksub[k] = gr;
+    });
+    kg.style.display = stkSub === 'kbd' ? '' : 'none'; tg.style.display = stkSub === 'txt' ? '' : 'none'; subb.append(kg, tg);
+    const kw = E('div', 'stkkey'); kw.append(subn, subb); sKey.w.append(kw);
     const sg = E('div', 'chips shapes');
     const SV = (vb, inner, st) => `<svg viewBox="${vb}" width="30" height="30" fill="${st ? 'none' : 'currentColor'}" ${st ? 'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"' : ''}>${inner}</svg>`;
     const SHI = {
@@ -1457,17 +1466,21 @@ function buildLeft() {
       hand: SV('0 0 100 120', `<path d="${HAND_D}" stroke-width="7"/>`, 1),
       handclick: SV('0 0 100 130', `<path d="${HAND_D}" transform="translate(0 10)" stroke-width="7"/><path d="M43 8V0M33 12L27 6M53 12l6-6M29 22h-8M57 22h8" stroke-width="7"/>`, 1),
     };
+    Object.keys(SHAPE_PTS).forEach((v) => { if (!SHI[v]) SHI[v] = SV('0 0 24 24', '<polygon points="' + SHAPE_PTS[v].map(([u, w]) => (u * 20 + 2).toFixed(1) + ',' + (w * 20 + 2).toFixed(1)).join(' ') + '"/>'); });
+    Object.keys(SHAPE_D).forEach((v) => { SHI[v] = SV('0 0 24 24', '<path transform="translate(2 2) scale(.2)" d="' + SHAPE_D[v] + '"/>'); });
     Object.keys(SHI).forEach((v) => { const b = E('button', 'chip', SHI[v]); b.title = SHAPE_NAMES[v]; b.onclick = () => addShape(v); sg.append(b); });
     sShape.w.append(sg);
     const g = E('div', 'stk-grid'); sMine.w.append(g);
     const trash = E('div', 'stk-trash', '🗑 삭제'); trash.style.display = 'none'; trash.ondragover = (e) => { e.preventDefault(); trash.classList.add('over'); }; trash.ondragleave = () => trash.classList.remove('over'); trash.ondrop = (e) => { e.preventDefault(); trash.style.display = 'none'; trash.classList.remove('over'); if (trash._del) trash._del(); };
-    const kg = E('div', 'stk-grid stk-names'), tg = E('div', 'stk-grid stk-names'); sKbd.w.append(kg); sTxt.w.append(tg); d.append(trash);
+    d.append(trash);
     const drag0 = (e, st) => { dragKind = 'sticker'; e.dataTransfer.setData('text/x-vtk', JSON.stringify({ k: 'sticker', st })); e.dataTransfer.effectAllowed = st.builtin ? 'copy' : 'copyMove'; };
     fetch('/api/stickers').then((r) => r.json()).then((l) => {
+      const rk = (st) => { const n = st.id.replace(/\.[^.]+$/, '').replace(/^[^_]*_/, ''), i = STK_ORDER.indexOf(n); return i < 0 ? 999 : i; };
+      l = l.slice().sort((p, q) => (q.builtin ? 1 : 0) - (p.builtin ? 1 : 0) || (p.builtin ? rk(p) - rk(q) : 0));
       l.forEach((st) => {
         if (st.builtin) {   // 편집기에 들어 있는 단축키 스티커: 같은 크기 글자 칸으로 보여줘요
           const t = E('button', 'stk-name', esc(st.id.replace(/\.[^.]+$/, '').replace(/^[^_]*_/, ''))); t.onclick = () => addSticker(st); t.draggable = true; t.ondragstart = (e) => drag0(e, st);
-          const k = st.id.startsWith('단축키_'); (k ? kg : tg).append(t); (k ? sKbd : sTxt).nb.style.display = ''; return;
+          const k = st.id.startsWith('단축키_'); (k ? kg : tg).append(t); sKey.nb.style.display = ''; return;
         }
         sMine.nb.style.display = '';
         const t = E('button', 'stk-tile'); t.title = st.name; const im = E('img'); im.src = '/api/sticker/file?n=' + encodeURIComponent(st.id); im.draggable = false; t.append(im); if (st.gif) t.append(E('span', 'gb', 'GIF'));
@@ -2305,14 +2318,28 @@ function buildFxTab(d) {
 
 /* ============ 도형 (사각형 · 원) ============ */
 const hexA = (h, a) => { h = String(h || '#000000').replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); const n = parseInt(h, 16) || 0; return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${clamp(a, 0, 1)})`; };
-const SHAPE_NAMES = { rect: '사각형', ellipse: '원', arrow: '화살표', check: '체크 표시', cross: 'X 표시', checkbox: '체크박스', pointer: '마우스 포인터', click: '클릭 표시', badge: '번호 동그라미', hand: '손가락 포인터', handclick: '손가락 클릭' };
+const SHAPE_NAMES = { rect: '사각형', ellipse: '원', arrow: '화살표', check: '체크 표시', cross: 'X 표시', checkbox: '체크박스', pointer: '마우스 포인터', click: '클릭 표시', badge: '번호 동그라미', hand: '손가락 포인터', handclick: '손가락 클릭', heart: '하트', star: '별', triangle: '삼각형', diamond: '마름모', pentagon: '오각형', hexagon: '육각형', plus: '더하기', bolt: '번개', chevron: '꺾쇠', darrow: '양쪽 화살표', bubble: '말풍선', bubble2: '둥근 말풍선' };
 const SHAPE_PTS = {
   arrow: [[0, .3], [.58, .3], [.58, 0], [1, .5], [.58, 1], [.58, .7], [0, .7]],
   check: [[.04, .56], [.2, .4], [.4, .6], [.8, .08], [.96, .24], [.4, .92]],
   cross: [[.2, 0], [.5, .3], [.8, 0], [1, .2], [.7, .5], [1, .8], [.8, 1], [.5, .7], [.2, 1], [0, .8], [.3, .5], [0, .2]],
-  pointer: [[0, 0], [0, .86], [.21, .67], [.36, 1], [.5, .94], [.35, .62], [.64, .62]]
+  pointer: [[0, 0], [0, .86], [.21, .67], [.36, 1], [.5, .94], [.35, .62], [.64, .62]],
+  star: [[0.5,0.04],[0.618,0.378],[0.976,0.385],[0.69,0.602],[0.794,0.945],[0.5,0.74],[0.206,0.945],[0.31,0.602],[0.024,0.385],[0.382,0.378]],
+  triangle: [[.5, 0], [1, 1], [0, 1]], diamond: [[.5, 0], [1, .5], [.5, 1], [0, .5]],
+  pentagon: [[0.5,0.03],[0.976,0.375],[0.794,0.935],[0.206,0.935],[0.024,0.375]],
+  hexagon: [[.25, 0], [.75, 0], [1, .5], [.75, 1], [.25, 1], [0, .5]],
+  plus: [[.35, 0], [.65, 0], [.65, .35], [1, .35], [1, .65], [.65, .65], [.65, 1], [.35, 1], [.35, .65], [0, .65], [0, .35], [.35, .35]],
+  bolt: [[.6, 0], [.12, .58], [.46, .58], [.34, 1], [.88, .4], [.52, .4]],
+  chevron: [[0, 0], [.45, 0], [1, .5], [.45, 1], [0, 1], [.55, .5]],
+  darrow: [[0, .5], [.2, .12], [.2, .34], [.8, .34], [.8, .12], [1, .5], [.8, .88], [.8, .66], [.2, .66], [.2, .88]]
 };
-const SHAPE_START = { hand: { w: 10, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, handclick: { w: 13, h: 15, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, badge: { w: 9, h: 9, fillColor: '#FF3B30', num: '1', numColor: '#ffffff' }, arrow: { w: 26, h: 13, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, click: { w: 9, h: 9, fillColor: '#FFE14D', fillOpacity: 45, stroke: true, strokeColor: '#FFD21F', strokeW: 6 }, check: { w: 12, h: 12, fillColor: '#22C55E' }, cross: { w: 12, h: 12, fillColor: '#FF3B30' }, checkbox: { w: 12, h: 12, fill: false, stroke: true, strokeColor: '#ffffff', strokeW: 8, radius: 15, checkColor: '#22C55E' }, pointer: { w: 9, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 4, shadow: true } };
+// 곡선이 있는 도형 (가로·세로 100 칸 안에 그린 선)
+const SHAPE_D = {
+  heart: 'M50 97C8 63 0 41 0 27C0 11 12 2 26 2C36 2 45 8 50 18C55 8 64 2 74 2C88 2 100 11 100 27C100 41 92 63 50 97Z',
+  bubble: 'M16 4H84Q98 4 98 18V58Q98 72 84 72H48L26 96L30 72H16Q2 72 2 58V18Q2 4 16 4Z',
+  bubble2: 'M50 4C24 4 3 21 3 41C3 53 10 63 21 70L15 97L46 77C47 77 49 77 50 77C76 77 97 61 97 41C97 21 76 4 50 4Z'
+};
+const SHAPE_START = { heart: { w: 18, h: 17, fillColor: '#FF3B30' }, star: { w: 18, h: 17, fillColor: '#FFD60A' }, triangle: { w: 18, h: 16 }, diamond: { w: 16, h: 18 }, pentagon: { w: 18, h: 17 }, hexagon: { w: 18, h: 16 }, plus: { w: 15, h: 15, fillColor: '#22C55E' }, bolt: { w: 12, h: 18 }, chevron: { w: 12, h: 16 }, darrow: { w: 28, h: 12, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, bubble: { w: 28, h: 22, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, bubble2: { w: 28, h: 22, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, hand: { w: 10, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, handclick: { w: 13, h: 15, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 5 }, badge: { w: 9, h: 9, fillColor: '#FF3B30', num: '1', numColor: '#ffffff' }, arrow: { w: 26, h: 13, fillColor: '#FF3B30', stroke: true, strokeColor: '#ffffff', strokeW: 4 }, click: { w: 9, h: 9, fillColor: '#FFE14D', fillOpacity: 45, stroke: true, strokeColor: '#FFD21F', strokeW: 6 }, check: { w: 12, h: 12, fillColor: '#22C55E' }, cross: { w: 12, h: 12, fillColor: '#FF3B30' }, checkbox: { w: 12, h: 12, fill: false, stroke: true, strokeColor: '#ffffff', strokeW: 8, radius: 15, checkColor: '#22C55E' }, pointer: { w: 9, h: 12, fillColor: '#ffffff', stroke: true, strokeColor: '#000000', strokeW: 4, shadow: true } };
 const SHAPE_DEF = { fill: true, fillColor: '#FFFD00', fillOpacity: 100, stroke: false, strokeColor: '#ffffff', strokeW: 6, strokeStyle: 'solid', strokeOpacity: 100, radius: 0, shadow: false, shadowColor: '#000000', shadowOpacity: 60, shadowBlur: 12, shadowX: 6, shadowY: 8, opacity: 100, lock: true };
 // 도형을 캔버스에 그림 (미리보기와 내보내기가 똑같이 이 함수를 써요). Wc = 화면 가로 픽셀
 const HAND_D = 'M36 12 a7 7 0 0 1 14 0 L50 46 a6 6 0 0 1 12 0 L62 52 a6 6 0 0 1 12 0 L74 58 a6 6 0 0 1 12 0 L86 82 Q86 108 62 112 L44 112 Q32 112 26 100 L10 74 Q6 66 14 62 Q20 60 25 66 L36 80 Z';
@@ -2330,7 +2357,7 @@ function drawShape(x, Wc) {
     const mt = new DOMMatrix().translate(-w / 2, -h / 2).scale(w / 100, h / VH).translate(0, dy);
     P2 = new Path2D(); P2.addPath(new Path2D(HAND_D), mt);
     if (click) { SPARK = new Path2D(); [-90, -135, -45, 180, 0].forEach((ag) => { const r = ag * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); const sp = new Path2D(); sp.moveTo(43 + 14 * c, 22 + 14 * s); sp.lineTo(43 + 22 * c, 22 + 22 * s); SPARK.addPath(sp, new DOMMatrix().translate(-w / 2, -h / 2).scale(w / 100, h / VH)); }); }
-  } else
+  } else if (SHAPE_D[x.shape]) { P2 = new Path2D(); P2.addPath(new Path2D(SHAPE_D[x.shape]), new DOMMatrix().translate(-w / 2, -h / 2).scale(w / 100, h / 100)); } else
   if (x.shape === 'ellipse' || x.shape === 'click' || x.shape === 'badge') g.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
   else if (SHAPE_PTS[x.shape]) { SHAPE_PTS[x.shape].forEach(([u, v], i) => { const px = (u - 0.5) * w, py = (v - 0.5) * h; if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath(); }
   else { const r = Math.min(clamp((x.radius || 0) / 100, 0, 0.5) * Math.min(w, h), w / 2, h / 2), l = -w / 2, t = -h / 2; g.moveTo(l + r, t); g.arcTo(l + w, t, l + w, t + h, r); g.arcTo(l + w, t + h, l, t + h, r); g.arcTo(l, t + h, l, t, r); g.arcTo(l, t, l + w, t, r); g.closePath(); }
