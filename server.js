@@ -1246,9 +1246,22 @@ if (process.env.AUTO_QUIT) {
 }
 
 // ---- 라우터 ----
+// ---- 지킴이: 편집기 화면에서 온 요청만 받아요 (다른 웹사이트가 몰래 보내는 요청은 막아요) ----
+const OK_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
+function fromOutside(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  if (!OK_HOSTS.has(host)) return true;   // 주소를 바꿔 치는 수법(DNS 리바인딩) 막기
+  const site = req.headers['sec-fetch-site'];
+  if (site === 'cross-site' || site === 'same-site') return true;   // 다른 사이트에서 보낸 요청
+  const org = req.headers.origin;
+  if (org && org !== 'null' && !OK_HOSTS.has(org.replace(/^https?:\/\//i, '').toLowerCase())) return true;
+  if (org === 'null' && req.method !== 'GET' && req.method !== 'HEAD') return true;
+  return false;
+}
 const server = http.createServer(async (req, res) => {
+  if (fromOutside(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Forbidden'); }
   const u = new URL(req.url, 'http://localhost');
-  const p = decodeURIComponent(u.pathname);
+  let p; try { p = decodeURIComponent(u.pathname); } catch (e) { res.writeHead(400); return res.end(); }
   try {
     if (req.method === 'POST' && p === '/api/upload') return handleUpload(req, res, u.searchParams);
     if (req.method === 'POST' && p === '/api/record') return handleRecord(req, res, u.searchParams);
