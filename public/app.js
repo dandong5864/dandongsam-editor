@@ -2201,7 +2201,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const settings = { 설명: '단동샘 편집기가 만든 편집 설정입니다. 편집파일_만드는법.txt 의 [편집설정.json] 설명대로 따라 주세요.', canvas: ratio,
         tpl: ratio === '9:16' ? (tplKey === 'none' ? null : { ...(tplKey[0] === 't' ? TPLS[+tplKey.slice(1)].v : tpls[+tplKey.slice(1)].v) }) : null,
         title: ratio === '9:16' && titleKey !== 'none' ? styleOfKey(titleKey, titles, TITLEDEF) : null,
-        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: ['fast', 'slow'].includes(opt.split) ? opt.split : null, lecture, stepCard };
+        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: opt.split === 'fast' ? 'fast' : 'slow', lecture, stepCard };
       post('/api/auto/settings', { path: sel.path, settings });
       const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); Rt.append(w); };
       if (ratio === '9:16') {
@@ -2211,7 +2211,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       if (lecture) { pick('템플릿', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]).filter((_, i) => ['STEP 번호 + 제목', '자료 받기'].includes(CARD_RECS[i].n))], cardKey, (k) => { opt.card = k; }); if (cardSum) Rt.append(E('div', 'apath', esc(cardSum))); }
       if (LAND) pick('세로 영상', [['rot90', '↻ 90° 돌려서 꽉 채우기'], ['rot270', '↺ 반대로 90°'], ['keep', '그대로 두기']], ['rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90', (k) => { opt.por = k; });
       pick('자막', [['def', '기본'], ...(ratio === '9:16' ? [['shorts', '쇼츠 자막']] : []), ...subs.map((t, i) => ['m' + i, '⭐ ' + t.n])], subKey, (k) => { opt.subBy[typeKey] = k; });
-      pick('자막 나누기', SPLIT_MODES, ['fast', 'slow'].includes(opt.split) ? opt.split : 'def', (k) => { opt.split = k; });
+      pick('자막 나누기', SPLIT_MODES, opt.split === 'fast' ? 'fast' : 'slow', (k) => { opt.split = k; });
       if (!subs.length) Rt.append(E('div', 'apath', '기본 = 글꼴 Cafe24 쑥쑥 · 흰 글자 · 검정 테두리 ' + SUBDEF.outline + ' · 크기 ' + SUBDEF.size + ' · 가로 50% · 세로 ' + SUBDEF.y + '% · 편집기에서 "내 자막 스타일"을 저장하면 여기서 고를 수 있어요'));
       const P = sel.path, R = P + info.sep + '결과', rt = ratio === '9:16' ? '9:16 세로 (쇼츠)' : '16:9 가로 (유튜브)', cv = ratio;
       const por = settings.portrait === 'keep' ? '세로로 찍은 영상은 돌리지 말고 그대로 둬.' : '세로로 찍은 영상(화면이 세로인 영상)은 가로 화면에 꽉 차도록 클립의 rot 를 ' + (settings.portrait === 'rot270' ? '270' : '90') + ' 으로 하고 fit 은 contain 으로 해 줘(자르거나 흐린 배경으로 채우지 마).';
@@ -2411,9 +2411,9 @@ function splitCaption(text, maxc) {
   if (cur) out.push(cur); return out;
 }
 /* ⚡ 빠른 자막 / 🐢 느린 자막: 나누는 규칙은 subsplit.js */
-const SPLIT_MODES = [['def', '기본'], ['fast', '⚡ 빠른 자막'], ['slow', '🐢 느린 자막']];
+const SPLIT_MODES = [['fast', '⚡ 빠른 자막'], ['slow', '🐢 느린 자막']];   // "기본"은 뺐어요. 고른 적 없으면 느린 자막
 const SPLIT_TIP = { fast: '1~2어절 · 8자 이내 · 0.5~1초씩 톡톡 (젊은 층)', slow: '뜻이 끝나는 곳에서 · 8~13자 · 2초 이상 (어르신)' };
-const splitMode = () => { try { const v = localStorage.getItem('vtk.subsplit'); return ['fast', 'slow'].includes(v) ? v : 'def'; } catch (e) { return 'def'; } };
+const splitMode = () => { try { const v = localStorage.getItem('vtk.subsplit'); return ['fast', 'slow'].includes(v) ? v : 'slow'; } catch (e) { return 'slow'; } };
 const setSplitMode = (v) => { try { localStorage.setItem('vtk.subsplit', v); } catch (e) {} };
 function putSplitSubs(list, mode, base) {   // 나눈 결과를 자막으로 넣어요. 무조건 한 줄: 가장 긴 줄이 화면 폭에 들어가게 글자 크기를 한꺼번에 맞춰요
   base = base || S.texts.find((t) => t.kind === 'sub') || {};
