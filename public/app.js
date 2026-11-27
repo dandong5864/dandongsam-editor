@@ -2049,6 +2049,7 @@ function loadProjectData(d) {
   if (lost.length && !d.__relinked) { relinkDialog(lost).then((got) => { d.__relinked = true; if (got) Object.assign(map, got); finishLoad(d, map); }); return; }
   finishLoad(d, map);
 }
+const TPL_FIT_MAX = 150;
 function fitTplMid() {   // 쇼츠 템플릿이 있으면 영상이 위·아래 띠 사이(가운데 칸)를 꽉 채우게 맞춰요. 일부러 크기를 바꾼 조각은 그대로 둬요
   const tp = tplOn(); if (!tp) return 0; let n = 0;
   const W = 1, H = 1 / canvasRatio(), midH = H * Math.max(0.05, 1 - ((+tp.top || 0) + (+tp.bottom || 0)) / 100);
@@ -2057,7 +2058,7 @@ function fitTplMid() {   // 쇼츠 템플릿이 있으면 영상이 위·아래 
     if (tp.fitMid) { c.fit = 'cover'; n++; return; }
     const odd = ((((+c.rot || 0) % 360) + 360) % 360) % 180 !== 0, rw = odd ? m.height : m.width, rh = odd ? m.width : m.height;
     const base = Math.min(W / rw, H / rh), want = Math.max(W / rw, midH / rh), sc = Math.round(want / base * 100);
-    if (sc > 100) { c.scale = Math.min(400, sc); n++; }
+    if (sc > 100) { c.scale = Math.min(TPL_FIT_MAX, sc); n++; }   // 너무 크게 키우면 화질이 떨어지고 양옆이 많이 잘려서 최대 150%까지만
   });
   return n;
 }
