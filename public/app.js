@@ -2207,6 +2207,11 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const row3 = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list.map(([k, l]) => [k, l]), cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); [...c.children].forEach((b, i) => { b.title = list[i][2]; }); w.append(c); Rt.append(w); };
       if (ratio === '9:16') row3('만들 영상', GENRES, genre, (k) => { opt.genre = k; });
       row3('진행 방식', MODES, mode, (k) => { opt.mode = k; });
+      // AI 목소리: 초보는 직접 녹음하기 어려워서, AI가 대본을 엣지 무료 목소리로 읽어 내레이션을 만들어요 (인터넷 필요)
+      const VOICES = [['none', '🎙 내 목소리', '내가 녹음한 내레이션을 쓰거나, 내레이션 없이 만들어요'], ['female', '👩 AI 여자', '무료 AI 목소리(선희)로 대본을 읽어 넣어요 · 인터넷이 필요해요'], ['male', '👨 AI 남자', '무료 AI 목소리(인준)로 대본을 읽어 넣어요 · 인터넷이 필요해요']];
+      const VNAME = { female: 'ko-KR-SunHiNeural', male: 'ko-KR-InJoonNeural' }, voiceKey = VNAME[opt.voice] ? opt.voice : 'none';
+      if (mode !== 'text') row3('목소리', VOICES, voiceKey, (k) => { opt.voice = k; });
+      const voice = mode !== 'text' && VNAME[voiceKey] ? { name: VNAME[voiceKey], rate: ratio === '9:16' ? '+10%' : '+0%' } : null;
       const LAND = ratio !== '9:16';   // 가로(롱폼)는 글자 크기 기준이 달라 훨씬 작게 잡아요
       const SUBDEF = { kind: 'sub', font: 'Cafe24 Ssurround', size: LAND ? 34 : 86, color: '#ffffff', outline: LAND ? 4 : 7, outlineColor: '#000000', x: 50, y: LAND ? 88 : 70 };
       const TITLEDEF = { kind: 'text', font: 'Cafe24 Ssurround', size: 90, color: '#ffffff', colors: ['#ffffff', '#FFFD00'], outline: 8, outlineColor: '#000000', x: 50, y: 16, lines: 2 };
@@ -2230,7 +2235,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const settings = { 설명: '단동샘 편집기가 만든 편집 설정입니다. 편집파일_만드는법.txt 의 [편집설정.json] 설명대로 따라 주세요.', canvas: ratio,
         tpl: ratio === '9:16' ? (tplKey === 'none' ? null : { ...(tplKey[0] === 't' ? TPLS[+tplKey.slice(1)].v : tpls[+tplKey.slice(1)].v) }) : null,
         title: ratio === '9:16' && titleKey !== 'none' ? styleOfKey(titleKey, titles, TITLEDEF) : null,
-        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: opt.split === 'fast' ? 'fast' : 'slow', lecture, stepCard, genre: lecture ? 'lecture' : (genre === 'none' ? null : genre), mode };
+        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: opt.split === 'fast' ? 'fast' : 'slow', lecture, stepCard, genre: lecture ? 'lecture' : (genre === 'none' ? null : genre), mode, voice };
       post('/api/auto/settings', { path: sel.path, settings });
       const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); dz.append(w); };
       const dz = E('div'), dOpen = ld('vtk.autodesign', '0') === '1';   // 꾸미기(템플릿·제목·자막·자막 나누기)는 접어 두고 고른 것만 한 줄로 보여 줘요
@@ -2253,7 +2258,8 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const GFILE = { tips: '생활꿀팁', docu: '다큐쇼핑', product: '상품소개', aigen: 'AI생성영상', overseas: '해외영상요약', lecture: '강의편집' }, gName = (GENRES.find((g) => g[0] === settings.genre) || [0, '📚 강의 편집'])[1].replace(/^\S+\s/, '');
       const MODE_RULE = { auto: '', step: ' 기획, 대본, 컷 계획을 만들 때마다 먼저 보여 주고 내가 좋다고 하면 다음 단계로 넘어가 줘.', text: ' 이번에는 .dsp 를 만들지 말고 글만 써 줘: 장르에 맞게 대본은 "결과" 폴더에 "대본.txt"로, AI 생성 영상이면 장면별 이미지·영상 생성 프롬프트를 "결과" 폴더에 "프롬프트.txt"로 저장해 줘.' };
       const GENRE_RULE = settings.genre ? ` 이 영상은 "${gName}" 영상이야. 폴더 안 "단동샘스킬/장르/${GFILE[settings.genre]}.md"를 읽고 그 규칙대로 만들어 줘.` : '';
-      const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
+      const VOICE_RULE = voice ? ' 내레이션은 내 목소리 대신 AI 목소리로 넣어 줘: 대본을 한 줄에 한 문장씩 "결과/대본.txt"로 저장한 뒤, "단동샘스킬/SKILL.md"의 "AI 목소리" 순서대로 단동샘스킬/scripts/narrate.py 를 실행해 이 폴더에 "내레이션.mp3"를 만들고(목소리·빠르기는 편집설정.json 의 voice), audio 에 넣어 줘. 영상 조각은 소리를 끄고 내레이션 길이에 맞춰 이어 붙이고, 자막은 narrate.py 가 만든 단어 시각으로 만들어 줘. 파이썬 실행이나 인터넷이 안 되면 대본.txt 만 저장하고 알려 줘.' : '';
+      const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + VOICE_RULE + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
         codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
         gpt: { name: 'ChatGPT', how: '채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json"을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.', prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. ${tail}` },
