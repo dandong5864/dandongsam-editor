@@ -641,7 +641,10 @@ function startExport(b) {
   fs.writeFileSync(path.join(dir, 'filter.txt'), g.filter);
   if (g.ass && g.ass.length) {
     g.ass.forEach((c, i) => fs.writeFileSync(path.join(dir, `sub${i}.ass`), c, 'utf8'));
-    listFonts().forEach((f) => { try { fs.copyFileSync(f.path, path.join(dir, 'fonts', f.file)); } catch (e) {} });
+    // 자막에 실제로 쓴 글꼴만 복사해요 (모두 복사하면 내보내기 시작이 느려요). 모르는 글꼴 이름이 있으면 예전처럼 모두 복사해요.
+    const used = new Set([...g.ass.join('\n').matchAll(/\\fn([^\\}]+)/g)].map((m) => m[1])), fl = listFonts();
+    const known = (nm) => fl.some((f) => f.family === nm || f.base === nm), all = [...used].some((nm) => !known(nm));
+    fl.forEach((f) => { if (!all && !used.has(f.family) && !used.has(f.base)) return; try { fs.copyFileSync(f.path, path.join(dir, 'fonts', f.file)); } catch (e) {} });
   }
   const args = ['-y', '-hide_banner', '-nostats', '-progress', 'pipe:1', ...g.inputs, '-filter_complex_script', 'filter.txt', ...g.enc, out];
   const job = { id, status: 'running', progress: 0, file: out, error: '', log: '' };
@@ -877,13 +880,6 @@ function openFolder(dir) {
   else if (process.platform === 'darwin') spawn('open', [dir], { detached: true, stdio: 'ignore' }).unref();
   else spawn('xdg-open', [dir], { detached: true, stdio: 'ignore' }).unref();
 }
-function findInJob(dir, name) {
-  const want = String(name || '').normalize('NFC').toLowerCase(); let hit = null;
-  const walk = (d, depth) => { if (hit || depth > 2) return; let l = []; try { l = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of l) { if (hit) return; const p = path.join(d, e.name); if (e.isDirectory()) walk(p, depth + 1); else if (e.name.normalize('NFC').toLowerCase() === want) hit = p; } };
-  walk(dir, 0); return hit;
-}
-
 // ---- 프로젝트가 적어 둔 파일 이름과 폴더의 실제 파일을 최대한 이어 줘요 ----
 const MED_RE = /\.(mp4|mov|m4v|mkv|webm|avi|wmv|flv|mpg|mpeg|ts|mts|m2ts|3gp|wav|mp3|m4a|aac|flac|ogg|opus|wma)$/i;
 function listMedia(dir, depth = 0, out = []) {
@@ -971,7 +967,7 @@ async function updCheck() {
     const j = JSON.parse(await httpGet(`https://api.github.com/repos/${UPD_REPO}/releases/latest`));
     const a = (j.assets || []).find((x) => /\.exe$/i.test(x.name || ''));
     const latest = String(j.tag_name || '').replace(/^v/i, '');
-    v = { current: APP_VER, latest, newer: !!(a && latest && verNewer(latest, APP_VER)), url: a ? a.browser_download_url : '', size: a ? a.size : 0 };
+    v = { current: APP_VER, latest, newer: !!(a && latest && verNewer(latest, APP_VER)), url: a ? a.browser_download_url : '', size: a ? a.size : 0, sha256: a && /^sha256:[0-9a-f]{64}$/i.test(a.digest || '') ? a.digest.slice(7).toLowerCase() : '' };
   }
   updCache = { t: Date.now(), v }; return v;
 }
@@ -980,9 +976,9 @@ function updDownload(url, dest, size, onProg, redirects = 6) {
     const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 DandongsamEditor' }, timeout: 30000 }, (r) => {
       if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location && redirects > 0) { r.resume(); return resolve(updDownload(new URL(r.headers.location, url).href, dest, size, onProg, redirects - 1)); }
       if (r.statusCode !== 200) { r.resume(); return reject(new Error('HTTP ' + r.statusCode)); }
-      const total = +r.headers['content-length'] || size || 0; let got = 0; const out = fs.createWriteStream(dest);
-      r.on('data', (d) => { got += d.length; if (total) onProg(Math.min(99, Math.round(got / total * 100))); });
-      r.pipe(out); out.on('finish', () => out.close(() => resolve(got))); out.on('error', reject); r.on('error', reject);
+      const total = +r.headers['content-length'] || size || 0; let got = 0; const out = fs.createWriteStream(dest), hash = crypto.createHash('sha256');
+      r.on('data', (d) => { got += d.length; hash.update(d); if (total) onProg(Math.min(99, Math.round(got / total * 100))); });
+      r.pipe(out); out.on('finish', () => out.close(() => resolve({ got, sha256: hash.digest('hex') }))); out.on('error', reject); r.on('error', reject);
     });
     req.on('timeout', () => req.destroy(new Error('시간 초과'))); req.on('error', reject);
   });
@@ -993,8 +989,9 @@ async function updStart(i) {
   try {
     if (process.env.DDS_UPDATE_TEST) { for (let k = 1; k <= 10; k++) { await new Promise((r) => setTimeout(r, 120)); upd.pct = k * 10 - (k === 10 ? 1 : 0); } upd.file = path.join(os.tmpdir(), 'dds_test_update.exe'); upd.state = 'ready'; upd.pct = 100; return; }
     if (!i.url || i.url.indexOf(`https://github.com/${UPD_REPO}/releases/download/`) !== 0) throw new Error('내려받을 주소가 올바르지 않아요');
-    const dest = path.join(os.tmpdir(), 'DandongsamEditor-Setup.exe'); try { fs.unlinkSync(dest); } catch (e) {}
-    const n = await updDownload(i.url, dest, i.size, (pc) => { upd.pct = pc; });
+    const dest = path.join(os.tmpdir(), `DandongsamEditor-Setup-${crypto.randomBytes(4).toString('hex')}.exe`);   // 매번 다른 이름으로 받아요 (다른 프로그램이 미리 바꿔 치기 못 하게)
+    const { got: n, sha256 } = await updDownload(i.url, dest, i.size, (pc) => { upd.pct = pc; });
+    if (i.sha256 && sha256 !== i.sha256) { try { fs.unlinkSync(dest); } catch (e) {} throw new Error('내려받은 파일의 지문이 맞지 않아요'); }   // 깃허브가 알려 준 지문(sha256)과 같은지 확인
     const hd = Buffer.alloc(2); const fd = fs.openSync(dest, 'r'); fs.readSync(fd, hd, 0, 2, 0); fs.closeSync(fd);
     if (hd.toString('latin1') !== 'MZ' || (i.size && n !== i.size)) throw new Error('내려받은 파일이 올바르지 않아요');
     upd.file = dest; upd.state = 'ready'; upd.pct = 100;

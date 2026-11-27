@@ -252,6 +252,7 @@ function audioTick() {
       else if (Math.abs(el.currentTime - want) > 0.35) el.currentTime = want;
     } else if (el && !el.paused) el.pause();
   }
+  for (const id of Object.keys(aEls)) if (!S.audio.some((a) => a.id === id)) { aEls[id].pause(); aEls[id].removeAttribute('src'); delete aEls[id]; }   // 지운 소리는 바로 멈추고 정리해요
 }
 
 /* ============ 추가 미디어 (영상·사진 겹치기) ============ */
@@ -343,12 +344,18 @@ function syncPip() {
     let el = pipEls[x.id]; const on = S.t >= x.start - 1e-6 && S.t < x.end && !tf('p').h;
     if (!on) { if (el && el.style.display !== 'none') { el.pause(); el.style.display = 'none'; } return; }
     if (!el) { el = pipEls[x.id] = document.createElement('video'); el.playsInline = true; el.preload = 'auto'; el.src = (S.media[x.mediaId] || {}).hasAlpha ? '/media/' + x.mediaId + '?a=1' : mediaUrl(x.mediaId); el.style.cssText = 'position:absolute;object-fit:fill;pointer-events:none'; pipbox.append(el); }
-    const w = x.w / 100 * W, h = x.h / 100 * W;
-    el.style.zIndex = (x.lane || 0) + 1; el.style.display = 'block'; el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (x.x / 100 * W - w / 2) + 'px'; el.style.top = (x.y / 100 * H - h / 2) + 'px';
-    // 테두리·둥근 모서리 (내보내기와 같은 계산: 두께는 가로 1080 기준, 둥글기는 짧은 변의 절반 기준 %)
-    const bw = x.border ? Math.max(1, +x.bw || 8) * W / 1080 : 0, rad = clamp(+x.br || 0, 0, 100) / 100 * Math.min(w, h) / 2;
-    el.style.boxSizing = 'border-box'; el.style.border = bw ? `${bw}px solid ${x.bc || '#ffffff'}` : 'none'; el.style.borderRadius = rad + 'px'; el.style.background = bw ? (x.bc || '#ffffff') : 'transparent';
-    el.style.opacity = (x.opacity == null ? 100 : x.opacity) / 100; el.volume = tf('p').m ? 0 : clamp((x.vol == null ? 100 : x.vol) / 100, 0, 1);
+    if (el.style.display !== 'block') el.style.display = 'block';
+    const sk = [W, H, x.x, x.y, x.w, x.h, x.lane, x.border, x.bw, x.bc, x.br, x.opacity].join('|');   // 자리·모양이 바뀔 때만 다시 그려요 (재생 중 매 프레임 다시 쓰지 않게)
+    if (el._sk !== sk) {
+      el._sk = sk;
+      const w = x.w / 100 * W, h = x.h / 100 * W;
+      el.style.zIndex = (x.lane || 0) + 1; el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (x.x / 100 * W - w / 2) + 'px'; el.style.top = (x.y / 100 * H - h / 2) + 'px';
+      // 테두리·둥근 모서리 (내보내기와 같은 계산: 두께는 가로 1080 기준, 둥글기는 짧은 변의 절반 기준 %)
+      const bw = x.border ? Math.max(1, +x.bw || 8) * W / 1080 : 0, rad = clamp(+x.br || 0, 0, 100) / 100 * Math.min(w, h) / 2;
+      el.style.boxSizing = 'border-box'; el.style.border = bw ? `${bw}px solid ${x.bc || '#ffffff'}` : 'none'; el.style.borderRadius = rad + 'px'; el.style.background = bw ? (x.bc || '#ffffff') : 'transparent';
+      el.style.opacity = (x.opacity == null ? 100 : x.opacity) / 100;
+    }
+    const vol = tf('p').m ? 0 : clamp((x.vol == null ? 100 : x.vol) / 100, 0, 1); if (el.volume !== vol) el.volume = vol;
     const want = (x.in || 0) + (S.t - x.start), drift = Math.abs(el.currentTime - want);
     if (playing && !reverse) { if (el.paused) { try { el.currentTime = want; } catch (e) {} el.play().catch(() => {}); } else if (drift > 0.35) { try { el.currentTime = want; } catch (e) {} } }
     else { if (!el.paused) el.pause(); if (drift > 0.04) { try { el.currentTime = want; } catch (e) {} } }
@@ -421,10 +428,6 @@ function addCard(c) {
   const items = texts.map((o) => { const x = JSON.parse(JSON.stringify(o)); if (ti && o === big) x.text = ti; return x; });
   const sec = bg ? (bg.len || CARD_SEC) : (Math.max(...texts.map((x) => x.len || CARD_SEC), CARD_SEC));
   return insertCard({ color: bg ? bg.color : null, sec, items });
-}
-function addBg(color) {
-  push(); layout(); const st = Math.round(S.t * 100) / 100, x = { id: nid(), kind: 'bg', start: st, end: Math.round((st + 3) * 100) / 100, color: color || '#1f6feb', opacity: 100, lane: 0 };
-  S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(); renderProps(); if (ltab === 'tpl') buildLeft();
 }
 function renderBgProps(p, x) {
   const upd = () => { renderTL(true); renderOv(true); syncPip(); saveLocal(); };
@@ -521,11 +524,11 @@ let bgSig = '';
 
 const activeTexts = () => S.texts.filter((x) => S.t >= x.start - 1e-6 && S.t < x.end && !tf(trkOfText(x)).h);
 let ovKey = '';
-function renderOv(force) { renderOv0(force); [...ov.children].forEach((el) => { const x = S.texts.find((q) => q.id === el.dataset.id); if (x) el.style.zIndex = (KBASE[x.kind] ?? 1) * 100 + (x.lane || 0) + 1; }); }
+function renderOv(force) { if (!renderOv0(force)) return; [...ov.children].forEach((el) => { const x = S.texts.find((q) => q.id === el.dataset.id); if (x) el.style.zIndex = (KBASE[x.kind] ?? 1) * 100 + (x.lane || 0) + 1; }); }
 function renderOv0(force) {
   const list = activeTexts(); const W = stage.clientWidth || 1, k = W / 1080;
   const key = W + '|' + (S.sel && S.sel.type === 't' ? S.sel.id : '') + '|' + JSON.stringify(list);
-  if (!force && key === ovKey) return; ovKey = key; ov.innerHTML = ''; setTimeout(syncPip, 0);
+  if (!force && key === ovKey) return false; ovKey = key; ov.innerHTML = ''; setTimeout(syncPip, 0);
   list.forEach((x) => {
     if (x.kind === 'bg') return;
     const d = E('div', 'ovt' + (x.kind === 'sticker' ? ' stk' : '') + (isSel('t', x.id) ? ' sel' : '')); d.dataset.id = x.id;
@@ -558,6 +561,7 @@ function renderOv0(force) {
     if (x.box) { d.style.display = 'flex'; d.style.flexDirection = 'column'; d.style.alignItems = 'center'; }
     ov.append(d);
   });
+  return true;
 }
 /* 가이드 선: 끌다가 가운데·가장자리에 가까워지면 붙으면서 분홍 선이 나와요 */
 const snapG = E('div'); snapG.id = 'snapg'; stage.append(snapG);
