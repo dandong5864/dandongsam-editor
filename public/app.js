@@ -2132,7 +2132,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
   async function show() {
     const info = await fetch('/api/auto/jobs').then((r) => r.json()).catch(() => null);
     if (!info) return toast('서버에 연결할 수 없어요');
-    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = 'codex';
+    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false;   // 주로 쓰는 AI는 기억해 둬요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
     const d = E('div', 'dlg auto-dlg', '<h2>AI 자동 편집</h2>');
     const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.insertBefore(xb, d.firstChild);
@@ -2224,12 +2224,26 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         claude: { name: 'Claude 앱', how: 'Claude 앱에서 이 폴더를 연결한 뒤 아래 말을 보내요.', prompt: `"${P}" 폴더에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 폴더 안의 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 폴더에 접근할 수 없으면 추측하지 말고 먼저 알려 줘.` },
         cc: { name: 'Claude Code', how: '아래 버튼으로 이 폴더에서 Claude Code 를 열고 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.`, term: true },
       };
+      if (!AI[ai]) ai = 'codex';
       Rt.append(E('div', 'asub', 'AI에게 보낼 말'));
-      const tabs = E('div', 'chips aitabs'); Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; draw(); }; tabs.append(t); });
+      const tabs = E('div', 'chips aitabs'); Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
       Rt.append(tabs, E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt)));
       const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
       if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }
       Rt.append(row);
+      { // 작업 폴더에 복사된 스킬 (단동샘스킬 폴더)
+        const sk = E('div'); Rt.append(sk); const at = sel.path;
+        fetch('/api/auto/skill?path=' + encodeURIComponent(at)).then((x) => x.json()).then((r) => {
+          if (!sel || sel.path !== at || r.error || !r.exists) return;
+          sk.append(E('div', 'asub', '복사된 스킬'));
+          const ln = E('div', 'apath', esc('📦 단동샘스킬 · 파일 ' + r.files.length + '개')); ln.title = r.dir + '\n' + r.files.join('\n'); sk.append(ln);
+          const br = E('div', 'abtns'); const vb = E('button', '', skillOpen ? '📖 스킬 접기' : '📖 스킬 보기'); vb.title = 'SKILL.md 내용 보기';
+          const fb = E('button', '', '📁 스킬 폴더 열기'); fb.onclick = async () => { const z = await post('/api/auto/openfolder', { path: r.dir }); if (z.error) toast(z.error); };
+          const box = E('div', 'abox'); box.textContent = r.text; box.style.whiteSpace = 'pre-wrap'; box.style.maxHeight = '320px'; box.style.overflow = 'auto'; box.hidden = !skillOpen;
+          vb.onclick = () => { skillOpen = !skillOpen; box.hidden = !skillOpen; vb.textContent = skillOpen ? '📖 스킬 접기' : '📖 스킬 보기'; };
+          br.append(vb, fb); sk.append(br, box);
+        }).catch(() => {});
+      }
       // 결과
       Rt.append(E('div', 'asub', '완성된 결과 (눌러서 열기)'));
       { const ib = E('button', 'primary aimp', '📥 받은 결과(.dsp) 가져오기'); const fi = E('input'); fi.type = 'file'; fi.accept = '.dsp,.json,.txt'; fi.hidden = true; ib.onclick = async () => { const r = await post('/api/auto/pickfile', { path: sel.path }); if (r.unsupported) return fi.click(); if (r.canceled) return; if (r.error) return toast(r.error, null, 6000); openResult({ file: r.file }); }; ib.title = 'ChatGPT 등에서 내려받은 .dsp 파일을 고르면 이 작업에 넣고 바로 열어요';

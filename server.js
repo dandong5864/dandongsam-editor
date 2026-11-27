@@ -838,7 +838,7 @@ function copyDir(src, dst) {
   }
 }
 const skillDone = new Set();
-function putSkill(dir) { if (skillDone.has(dir)) return; try { if (fs.existsSync(SKILL_SRC)) { copyDir(SKILL_SRC, path.join(dir, '단동샘스킬')); skillDone.add(dir); } } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
+function putSkill(dir) { if (skillDone.has(dir) && fs.existsSync(path.join(dir, '단동샘스킬', 'SKILL.md'))) return; try { if (fs.existsSync(SKILL_SRC)) { copyDir(SKILL_SRC, path.join(dir, '단동샘스킬')); skillDone.add(dir); } } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
   fs.writeFileSync(path.join(dir, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8');
@@ -1336,6 +1336,13 @@ const server = http.createServer(async (req, res) => {
       let dest = path.resolve(f);
       if (path.dirname(dest) !== path.resolve(R) || !/\.dsp$/i.test(dest)) { const nm = (path.basename(f).replace(/\.(dsp|json|txt)$/i, '').replace(/[\\/:*?"<>|]/g, '') || '결과') + '.dsp'; dest = path.join(R, nm); fs.writeFileSync(dest, JSON.stringify(j), 'utf8'); }
       return json(res, 200, { file: dest });
+    }
+    if (req.method === 'GET' && p === '/api/auto/skill') {   // 작업 폴더에 복사된 스킬 보여 주기
+      const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
+      putSkill(dir); const sd = path.join(dir, '단동샘스킬'), files = [];
+      const walk = (d, rel, depth) => { let l = []; try { l = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; } l.forEach((e) => { if (e.name === '__pycache__' || e.name.endsWith('.pyc')) return; const r = rel ? rel + '/' + e.name : e.name; if (e.isDirectory()) { if (depth < 3) walk(path.join(d, e.name), r, depth + 1); } else files.push(r); }); };
+      walk(sd, '', 0); let text = ''; try { text = fs.readFileSync(path.join(sd, 'SKILL.md'), 'utf8'); } catch (e) {}
+      return json(res, 200, { dir: sd, exists: !!text, files: files.sort(), text });
     }
     if (req.method === 'POST' && p === '/api/auto/openfolder') {
       const b = await readBody(req); if (!autoAllowed(String(b.path || ''))) return json(res, 400, { error: '열 수 없는 폴더예요' });
