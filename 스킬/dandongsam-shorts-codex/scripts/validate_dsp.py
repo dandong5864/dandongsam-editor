@@ -76,6 +76,16 @@ def main():
         bad = [t['id'] for t in texts if t.get('kind') == 'sub' and any(t.get(k) != v for k, v in ss.items() if k != 'kind')]
         if bad: warn.append(f'자막 {len(bad)}줄이 편집설정의 자막 스타일과 달라요 (예: {bad[0]})')
         if settings.get('title') and not any(t.get('kind') == 'text' for t in texts): warn.append('편집설정에 제목이 있는데 제목 글자(kind: text)가 없어요')
+        if settings.get('genre') == 'overseas':   # 해외 영상 요약: 원본은 짧게
+            long_ = [c['id'] for c in clips if (float(c.get('out', 0)) - float(c.get('in', 0))) / (float(c.get('speed', 1)) or 1) > 6.05]
+            if long_: warn.append(f'원본 조각이 길어요: 6초 넘는 조각 {len(long_)}개 (예: {long_[0]}) → 2~4초로 나눠 주세요')
+            for k in {c.get('mediaId') for c in clips}:
+                used = sum(float(c.get('out', 0)) - float(c.get('in', 0)) for c in clips if c.get('mediaId') == k)
+                if dur.get(k) and used > dur[k] * 0.3 + 0.05: warn.append(f'원본 {k} 를 {used:.1f}초 썼어요 (원본 {dur[k]:.1f}초의 30% 넘음)')
+            run, worst = 0, 0
+            for c in clips:
+                run = run + 1 if c.get('mediaId') in dur else 0; worst = max(worst, run)
+            if worst > 3 and not any(t.get('kind') in ('text', 'zoom', 'shape') for t in texts): warn.append('원본 조각만 이어져 있어요 (해설 글자·확대·도형을 사이사이 넣어 주세요)')
     stray = [f for f in present if f.lower().endswith(('.mp4', '.mov', '.wav', '.mp3', '.m4a', '.mkv')) and f not in {nfc((m.get('name') if isinstance(m, dict) else m) or '') for m in media.values()}]
     if stray: print('참고: 프로젝트에서 안 쓰는 파일이 폴더에 있어요 →', ', '.join(sorted(stray)[:6]))
     for w in warn: print('△', w)
