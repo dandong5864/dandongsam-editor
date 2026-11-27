@@ -42,11 +42,34 @@ const WS = path.join(DATA_ROOT, 'workspace');
 try {
   if (!fs.existsSync(WS) && fs.existsSync(LEGACY_WS)) { fs.mkdirSync(DATA_ROOT, { recursive: true }); copyDir(LEGACY_WS, WS); }
 } catch (e) { console.log('이전 작업 옮기기 실패:', e.message); }
+// ---- 사용자가 찾아야 하는 파일(내보낸 영상·캡처·자동 편집 폴더)은 '다운로드\단동샘 편집기' 안에 둬요 (초보도 찾기 쉽게) ----
+// 다운로드 폴더를 다른 곳(D 드라이브·원드라이브 등)으로 옮긴 PC도 윈도우가 알고 있는 실제 위치를 찾아요. 한 번 찾으면 기억해 둬요.
+function findDownloads() {
+  const def = path.join(os.homedir(), 'Downloads');
+  if (process.platform !== 'win32') return def;
+  try {
+    const o = require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "[Console]::OutputEncoding=[Text.Encoding]::UTF8; (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path"], { encoding: 'utf8', windowsHide: true, timeout: 8000 }).trim();
+    if (o && path.isAbsolute(o) && fs.existsSync(o)) return o;
+  } catch (e) {}
+  return def;
+}
+const writable = (d) => { try { fs.mkdirSync(d, { recursive: true }); const t = path.join(d, '.dds_write_test'); fs.writeFileSync(t, ''); fs.unlinkSync(t); return true; } catch (e) { return false; } };
+const hasFiles = (d) => { try { return fs.readdirSync(d).some((n) => !n.startsWith('.')); } catch (e) { return false; } };
+const USER_BASE = (() => {
+  const sf = path.join(WS, 'settings.json'); let st = {}; try { st = JSON.parse(fs.readFileSync(sf, 'utf8')); } catch (e) {}
+  if (st.userBase && fs.existsSync(path.dirname(st.userBase))) return st.userBase;
+  let dl = findDownloads(); if (!writable(dl)) dl = os.homedir();
+  const b = path.join(dl, '단동샘 편집기'); st.userBase = b;
+  try { fs.mkdirSync(WS, { recursive: true }); fs.writeFileSync(sf, JSON.stringify(st)); } catch (e) {}
+  return b;
+})();
+// 예전 버전에서 프로그램 폴더 안에 파일을 만들어 둔 사람은 그 자리를 그대로 써요 (찾던 곳이 갑자기 바뀌지 않게)
+const userDir = (name) => { const old = path.join(ROOT, name); return hasFiles(old) && writable(old) ? old : path.join(USER_BASE, name); };
 const DIRS = {
   media: path.join(WS, 'media'),
   cache: path.join(WS, 'cache'),
-  out: path.join(ROOT, '내보내기'),
-  cap: path.join(ROOT, '캡처'),
+  out: userDir('내보내기'),
+  cap: userDir('캡처'),
   fonts: path.join(WS, 'fonts'),
 };
 Object.values(DIRS).forEach((d) => fs.mkdirSync(d, { recursive: true }));
@@ -752,7 +775,8 @@ function pickDir(cur) {
 
 // ---- 자동 편집 폴더 (Claude·ChatGPT 같은 AI에게 맡길 영상/소스를 넣어 두는 곳) ----
 const AUTO_CFG = path.join(WS, 'auto.json');
-const AUTO_DEFAULT = path.join(os.homedir(), 'Documents', '단동샘 자동편집');
+const AUTO_OLD = path.join(os.homedir(), 'Documents', '단동샘 자동편집');   // 예전 기본 위치 (이미 쓰던 사람은 그대로)
+const AUTO_DEFAULT = hasFiles(AUTO_OLD) ? AUTO_OLD : path.join(USER_BASE, '자동편집');
 function autoCfg() { let c = {}; try { c = JSON.parse(fs.readFileSync(AUTO_CFG, 'utf8')); } catch (e) {} return { root: c.root || AUTO_DEFAULT, extra: Array.isArray(c.extra) ? c.extra : [] }; }
 function autoSave(c) { try { fs.writeFileSync(AUTO_CFG, JSON.stringify(c)); } catch (e) {} }
 const inside = (p, root) => { const r = path.resolve(root), q = path.resolve(p); return q === r || q.startsWith(r + path.sep); };
