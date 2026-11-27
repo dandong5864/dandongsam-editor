@@ -79,22 +79,32 @@ function askBox(msg, o) {
 }
 const ask = (msg, o) => askBox(msg, o);
 const askText = (msg, def) => askBox(msg, { input: true, def });
-let goneBox = null;
-function showGone() {   // 편집기(서버)가 꺼졌을 때: 이유와 해결 방법을 크게 알려줘요
+let goneBox = null, goneCheck = null;
+function showGone() {   // 편집기와 연결이 끊겼을 때: 저절로 다시 이어 보고, 안 되면 다시 켜는 방법을 알려줘요
+  if (goneBox) return;
+  if (!goneCheck) {   // 잠깐 끊긴 것일 수 있으니 몇 번 더 확인한 다음에 창을 띄워요
+    let n = 0;
+    goneCheck = setInterval(() => fetch('/api/ping').then((r) => { if (r.ok) { clearInterval(goneCheck); goneCheck = null; } }).catch(() => { if (++n >= 3) { clearInterval(goneCheck); goneCheck = null; openGone(); } }), 1500);
+  }
+}
+function openGone() {
   if (goneBox) return;
   const bg = E('div', ''), bx = E('div', '');
   bg.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center';
   bx.style.cssText = 'background:#1c1c22;border:1px solid #3a3a44;border-radius:16px;padding:30px 34px;max-width:460px;text-align:center;color:#fff;line-height:1.7';
-  bx.innerHTML = '<div style="font-size:42px">💤</div><div style="font-size:21px;font-weight:700;margin:6px 0 10px">자리를 너무 오래 비워 두셨어요</div><div style="font-size:16px;color:#cfd0d8">그동안 편집기가 쉬려고 꺼졌어요.<br>작업하던 내용은 자동으로 저장되어 있어요.<br><b style="color:#26d4c4">다시 연결할게요!</b></div>';
+  bx.innerHTML = '<div style="font-size:42px">🔌</div><div style="font-size:21px;font-weight:700;margin:6px 0 10px">편집기와 연결이 끊겼어요</div><div class="gone-msg" style="font-size:16px;color:#cfd0d8">작업하던 내용은 자동으로 저장되어 있어요.<br><b style="color:#26d4c4">다시 연결하는 중이에요…</b></div>';
+  const msg = bx.querySelector('.gone-msg');
   const bt = E('button', 'primary bigbtn', '다시 연결하기'); bt.style.marginTop = '18px';
-  bt.onclick = () => { fetch('/api/ping').then((r) => { if (r.ok) location.reload(); else bt.textContent = '연결하는 중… 편집기를 다시 실행해 주세요'; }).catch(() => { bt.textContent = '연결하는 중… 편집기를 다시 실행해 주세요'; }); };
+  let fails = 0;
+  const later = () => { msg.innerHTML = '작업하던 내용은 자동으로 저장되어 있어요.<br>이 창을 닫고 <b style="color:#26d4c4">바탕화면의 단동샘 편집기 아이콘</b>을<br>다시 눌러 주세요.'; };
+  const tryBack = () => fetch('/api/ping').then((r) => { if (r.ok) location.reload(); }).catch(() => { if (++fails >= 8) later(); });   // 편집기가 다시 켜지면 저절로 이어져요
+  bt.onclick = () => { bt.textContent = '연결하는 중…'; fetch('/api/ping').then((r) => { if (r.ok) location.reload(); }).catch(() => { later(); bt.textContent = '다시 연결하기'; }); };
   bx.append(bt); bg.append(bx); document.body.append(bg); goneBox = bg;
-  const tryBack = () => fetch('/api/ping').then((r) => { if (r.ok) location.reload(); }).catch(() => {});   // 편집기가 다시 켜지면 저절로 이어져요
   setInterval(tryBack, 2000); tryBack();
 }
 function toast(msg, action, ms = 3500) {
   if (/못|실패|오류|없어요|안 돼/.test(msg)) clientLog('알림', msg);
-  if (/서버에 연결할 수 없어요/.test(msg)) return showGone();
+  if (/서버에 연결할 수 없어요/.test(msg)) { showGone(); msg = '잠시 문제가 생겼어요. 한 번 더 해 주세요'; }   // 정말 끊긴 경우에만 연결 끊김 창이 떠요
   const t = E('div', 'toast'); t.append(E('span', '', esc(msg)));
   if (action) { const b = E('button', '', action.label); b.onclick = () => { action.fn(); t.remove(); }; t.append(b); }
   $('#toast').append(t); setTimeout(() => t.remove(), action ? 7000 : ms);
@@ -165,6 +175,7 @@ function ensureSrc(c) {
 async function seek(t, silent) {
   const my = ++token;
   layout(); t = clamp(t, 0, S.total); S.t = t;
+  { const x = t * S.zoom, l = tlScroll.scrollLeft, w = tlScroll.clientWidth; if (x < 1) tlScroll.scrollLeft = 0; else if (w > 100 && (x < l || x > l + w - 20)) tlScroll.scrollLeft = Math.max(0, x - 60); }   // 재생 위치가 늘 보이게 (처음으로 가면 00:00부터)
   const loc = locate(t);
   if (!loc) { cur = null; video.style.display = 'none'; updateUI(); return; }
   const c = loc.c;
@@ -920,7 +931,7 @@ function addToTimeline(mid, atHead, over) {
   else { S.audio.push({ id: nid(), mediaId: mid, start: S.t, in: 0, out: m.duration, vol: 100 }); }
   changed(); return made;
 }
-function setCanvas(v) { push(); S.canvas = v; changed(); }
+function setCanvas(v) { push(); S.canvas = v; oriSel = null; changed(); }
 
 /* ============ 줌 / 스크롤 ============ */
 function setZoom(z, anchor) {
@@ -1158,7 +1169,12 @@ function renderProps() {
   }
   renderPropsSel(p, s);
 }
+let oriSel = null;   // 템플릿·텍스트 탭의 세로/가로 (고르지 않으면 지금 화면 비율을 따라가요)
+const curOri = () => oriSel || (S.canvas === '9:16' ? 'v' : 'h');
+function oriChips(p) { const c = chips([['v', '📱 세로'], ['h', '🖥 가로']], curOri(), (v) => { oriSel = v; buildLeft(); }); c.classList.add('wide2', 'orisw'); p.append(c); }
 function bgControls(p) {
+  oriChips(p);
+  if (curOri() === 'v') return shortsTplControls(p);
   p.append(sec('제목 화면'));
   const nxt = S.texts.filter((x) => x.kind === 'bg' && x.card).length + 1;
   const mi = (ph, val, set) => { const i = E('input', 'ttl-in'); i.type = 'text'; i.placeholder = ph; i.value = val; i.maxLength = 40; i.onkeydown = (e) => e.stopPropagation(); i.oninput = () => set(i.value); return i; };
@@ -1175,9 +1191,11 @@ function bgControls(p) {
   const cl = myCards(); if (cl.length) { const col = E('div', 'tplcol'); cl.forEach((c, i) => { const r = E('div', 'tplrow'), bt = E('button', 'tplpick', '⭐ ' + esc(c.n)); bt.onclick = () => addCard(c); const dx = E('button', 'tpldel', '×'); dx.title = '삭제'; dx.onclick = () => { const l = myCards(); l.splice(i, 1); saveMyCards(l); buildLeft(); }; r.append(bt, dx); col.append(r); }); p.append(col); }
   const cr = E('div', 'savetpl'), cn = E('input'); cn.type = 'text'; cn.placeholder = '이름 (예: 우리 채널 단계 화면)'; cn.maxLength = 20; cn.onkeydown = (e) => e.stopPropagation();
   const cb = E('button', 'primary', '＋ 저장'); cb.onclick = () => { const n = cn.value.trim(); if (!n) return toast('이름을 적어 주세요'); saveCard(n); buildLeft(); }; cr.append(cn, cb); p.append(cr);
-  if (S.canvas !== '9:16') return;
+}
+function shortsTplControls(p) {   // 세로(쇼츠) 템플릿: 위·아래 띠 (고르면 화면 비율이 9:16으로 바뀌어요)
+  const to916 = () => { if (S.canvas !== '9:16') { S.canvas = '9:16'; const cs = $('#sel-canvas'); if (cs) cs.value = '9:16'; } };
   p.append(sec('위·아래 띠'));
-  const bc = chips([['none', '🚫 없음'], ['tpl', '위·아래 띠']], tplOn() ? 'tpl' : 'none', (v) => { push(); if (v === 'tpl') { S.tpl = S.tpl || { ...TPLS[0].v }; } else { S.tpl = null; S.bg = 'none'; } changed(); });
+  const bc = chips([['none', '🚫 없음'], ['tpl', '위·아래 띠']], tplOn() ? 'tpl' : 'none', (v) => { push(); if (v === 'tpl') { to916(); S.tpl = S.tpl || { ...TPLS[0].v }; } else { S.tpl = null; S.bg = 'none'; } changed(); });
   bc.classList.add('wide2'); p.append(bc);
   if (!tplOn()) return;
   const t = S.tpl, up = () => { updateStage(); saveLocal(); };
@@ -1409,22 +1427,74 @@ addEventListener('pagehide', () => { if (saveTimer) { clearTimeout(saveTimer); s
 addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) { clearTimeout(saveTimer); saveTimer = 0; saveLocalNow(); } });
 
 /* ============ 미디어 패널 / 업로드 ============ */
+// 가져온 파일 여러 개 고르기: 빈 곳에서 끌어서 네모로 고르기 · Ctrl/Shift+클릭 · Ctrl+A → Delete 또는 [선택한 파일 지우기]
+const mSel = new Set(); let mSelOn = false, mLast = null;
+const shownMedia = () => Object.values(S.media).filter((m) => S.pm.has(m.id) && !m.color && !m.hide);
+function mSelPaint() {
+  const l = $('#media-list'); if (!l) return;
+  [...mSel].forEach((id) => { if (!shownMedia().some((m) => m.id === id)) mSel.delete(id); });
+  l.querySelectorAll('.mitem').forEach((it) => it.classList.toggle('msel', mSel.has(it.dataset.id)));
+  const bar = $('#msel-bar'); if (!bar) return;
+  bar.style.display = mSel.size ? '' : 'none';
+  const b = bar.querySelector('.msel-del'); if (b) b.textContent = `🗑 선택한 파일 지우기 (${mSel.size})`;
+}
+async function removeMediaMany(ids) {
+  ids = ids.filter((id) => S.media[id]); if (!ids.length) return;
+  if (ids.length === 1) { await removeMedia(ids[0]); mSel.clear(); mSelPaint(); return; }
+  const used = ids.filter((id) => S.clips.some((c) => c.mediaId === id) || S.audio.some((a) => a.mediaId === id)).length;
+  if (!(await ask(used ? `파일 ${ids.length}개를 목록에서 지울까요?\n그중 ${used}개는 타임라인에서 사용 중이라 사용된 컷도 함께 삭제돼요.` : `파일 ${ids.length}개를 목록에서 지울까요?`, { danger: true, ok: '삭제' }))) return;
+  push(); const set = new Set(ids); S.clips = S.clips.filter((c) => !set.has(c.mediaId)); S.audio = S.audio.filter((a) => !set.has(a.mediaId));
+  await Promise.all(ids.map((id) => fetch('/api/media/' + id, { method: 'DELETE' }).catch(() => {})));
+  ids.forEach((id) => { delete S.media[id]; mSel.delete(id); }); S.sel = null; changed(); toast(`파일 ${ids.length}개를 지웠어요`);
+}
+document.addEventListener('pointerdown', (e) => { if (!mSelOn) return; if (e.target.closest && (e.target.closest('#media-list') || e.target.closest('#msel-bar') || e.target.closest('.askbox') || e.target.closest('.dlg'))) return; mSelOn = false; if (mSel.size) { mSel.clear(); mSelPaint(); } }, true);
+function mediaBand(l) {   // 빈 곳에서 끌면 네모 안에 든 파일이 골라져요
+  l.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('.mitem')) return;
+    mSelOn = true; const keep = e.ctrlKey || e.metaKey || e.shiftKey, base = keep ? new Set(mSel) : new Set();
+    if (!keep) { mSel.clear(); mSelPaint(); }
+    const r0 = l.getBoundingClientRect(), x0 = e.clientX - r0.left + l.scrollLeft, y0 = e.clientY - r0.top + l.scrollTop;
+    const band = E('div', 'mband'); let moved = false;
+    const mv = (ev) => {
+      const r = l.getBoundingClientRect(), x1 = ev.clientX - r.left + l.scrollLeft, y1 = ev.clientY - r.top + l.scrollTop;
+      if (!moved && Math.hypot(x1 - x0, y1 - y0) < 4) return;
+      if (!moved) { moved = true; l.append(band); }
+      if (ev.clientY > r.bottom - 20) l.scrollTop += 12; else if (ev.clientY < r.top + 20) l.scrollTop -= 12;
+      const L = Math.min(x0, x1), T = Math.min(y0, y1), W = Math.abs(x1 - x0), H = Math.abs(y1 - y0);
+      Object.assign(band.style, { left: L + 'px', top: T + 'px', width: W + 'px', height: H + 'px' });
+      mSel.clear(); base.forEach((id) => mSel.add(id));
+      l.querySelectorAll('.mitem').forEach((it) => { const q = it.getBoundingClientRect(), ix = q.left - r.left + l.scrollLeft, iy = q.top - r.top + l.scrollTop; if (ix < L + W && ix + q.width > L && iy < T + H && iy + q.height > T) mSel.add(it.dataset.id); });
+      mSelPaint();
+    };
+    const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); band.remove(); };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up); e.preventDefault();
+  });
+}
 function fillMedia() {
-  const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = Object.values(S.media).filter((m) => S.pm.has(m.id) && !m.color && !m.hide);
-  if (!ms.length) { l.append(E('div', 'empty-media', '아직 가져온 파일이 없어요.<br>＋ 가져오기를 누르거나<br>파일을 끌어다 놓으세요.')); return; }
+  const l = $('#media-list'); if (!l) return; l.innerHTML = ''; const ms = shownMedia();
+  if (!l.dataset.band) { l.dataset.band = 1; mediaBand(l); }
+  if (!ms.length) { mSel.clear(); mSelPaint(); l.append(E('div', 'empty-media', '아직 가져온 파일이 없어요.<br>＋ 가져오기를 누르거나<br>파일을 끌어다 놓으세요.')); return; }
   ms.forEach((m) => {   // 썸네일 타일: 위에 그림 + 길이, 아래에 이름
-    const it = E('div', 'mitem');
+    const it = E('div', 'mitem'); it.dataset.id = m.id;
+    it.onclick = (e) => {
+      mSelOn = true;
+      if (e.shiftKey && mLast) { const ids = shownMedia().map((q) => q.id), a = ids.indexOf(mLast), b = ids.indexOf(m.id); if (a >= 0 && b >= 0) { if (!(e.ctrlKey || e.metaKey)) mSel.clear(); ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((id) => mSel.add(id)); } }
+      else if (e.ctrlKey || e.metaKey) { if (mSel.has(m.id)) mSel.delete(m.id); else mSel.add(m.id); mLast = m.id; }
+      else { mSel.clear(); mSel.add(m.id); mLast = m.id; }
+      mSelPaint();
+    };
     const th = E('div', 'th', m.hasVideo ? '' : '🎵'); if (m.thumb) th.style.backgroundImage = `url(/api/thumb/${m.id})`;
     th.append(E('span', 'dur', fmt(m.duration, 0)));
     const nm = E('div', 'nm', esc(m.name));
     const bt = E('div', 'btns'); const add = E('button', 'add', '＋'); add.title = '타임라인에 추가'; const rm = E('button', 'rm', '✕'); rm.title = '목록에서 제거';
     add.onclick = (e) => { e.stopPropagation(); addToTimeline(m.id, true); };
-    rm.onclick = (e) => { e.stopPropagation(); removeMedia(m.id); };
+    rm.onclick = (e) => { e.stopPropagation(); if (mSel.size > 1 && mSel.has(m.id)) removeMediaMany([...mSel]); else removeMedia(m.id); };
     if (m.hasVideo) { const pb = E('button', 'add', '⧉'); pb.title = '추가 미디어로 올리기'; pb.onclick = (e) => { e.stopPropagation(); addPip(m.id, S.t); }; bt.append(add, pb, rm); } else bt.append(add, rm);
     it.append(th, nm, bt); it.draggable = true; it.ondragstart = (e) => { dragKind = m.hasVideo ? 'pipv' : 'aud'; e.dataTransfer.setData('text/x-vtk', JSON.stringify({ k: 'media', id: m.id })); e.dataTransfer.effectAllowed = 'copy'; }; it.ondblclick = () => addToTimeline(m.id, true);
     it.title = `${m.name}\n${m.hasVideo ? m.width + '×' + m.height + ' · ' : ''}더블클릭하면 타임라인에 추가돼요`;
     l.append(it);
   });
+  mSelPaint();
 }
 
 /* ============ 왼쪽 탭 (미디어 · 오디오 · 텍스트 · 자막 · 템플릿) ============ */
@@ -1495,16 +1565,23 @@ function buildLeft() {
   if (ltab === 'media') {
     const h = E('div', 'mhead', '<b>가져온 파일</b>'); const bt = E('button', 'primary sm', '＋ 가져오기'); bt.id = 'btn-import'; bt.onclick = () => $('#file-input').click(); h.append(bt);
     const l = E('div'); l.id = 'media-list'; const ft = E('div');
-    b.append(h, l, ft); fillMedia();
+    const bar = E('div', 'msel-bar'); bar.id = 'msel-bar'; bar.style.display = 'none';
+    const bd = E('button', 'danger msel-del', '🗑 선택한 파일 지우기'); bd.onclick = () => removeMediaMany([...mSel]);
+    const bx = E('button', 'msel-x', '선택 해제'); bx.onclick = () => { mSel.clear(); mSelPaint(); };
+    bar.append(bd, bx);
+    b.append(h, bar, l, ft); fillMedia();
   } else if (ltab === 'audio') {
     const d = E('div', 'pane'); b.append(d); buildSfx(d);
   } else if (ltab === 'text') {
     const d = E('div', 'pane'); b.append(d);
+    oriChips(d);
     d.append(E('h4', '', '글자 넣기'));
-    const b1 = E('button', 'primary bigbtn', '＋ 기본 텍스트'); b1.onclick = () => addText('text');
-    const b2 = E('button', 'bigbtn', '＋ 쇼츠 제목 (2줄: 흰색 / 노랑)'); b2.onclick = addTitlePreset;
-    const b3 = E('button', 'bigbtn', '＋ 쇼츠 자막'); b3.onclick = addShortsCaption;
-    d.append(b1, b2, b3);
+    const b1 = E('button', 'primary bigbtn', '＋ 기본 텍스트'); b1.onclick = () => addText('text'); d.append(b1);
+    if (curOri() === 'v') {
+      const b2 = E('button', 'bigbtn', '＋ 쇼츠 제목 (2줄: 흰색 / 노랑)'); b2.onclick = addTitlePreset;
+      const b3 = E('button', 'bigbtn', '＋ 쇼츠 자막'); b3.onclick = addShortsCaption;
+      d.append(b2, b3);
+    }
     d.append(E('h4', '', '넣은 텍스트'));
     const ts = S.texts.filter((x) => x.kind === 'text'); if (!ts.length) d.append(E('div', 'hint', '아직 없어요')); ts.forEach((x) => d.append(itemRow(x)));
   } else if (ltab === 'stk') {
@@ -1750,7 +1827,8 @@ addEventListener('keydown', (e) => {
   if (ctrl && (e.altKey || e.shiftKey) && (e.code === 'KeyC' || e.code === 'KeyV')) {
     if (e.code === 'KeyC') copyAttr(); else if (e.code === 'KeyV') pasteAttr(); else h = false;
   } else if (ctrl) {
-    if (k === 'b') e.shiftKey ? splitAll() : splitCmd();
+    if (k === 'a' && mSelOn && ltab === 'media') { shownMedia().forEach((m) => mSel.add(m.id)); mSelPaint(); }
+    else if (k === 'b') e.shiftKey ? splitAll() : splitCmd();
     else if (k === 'z') e.shiftKey ? redo() : undo();
     else if (k === 'y') redo();
     else if (k === 'c') copy(); else if (k === 'v') paste();
@@ -1762,7 +1840,7 @@ addEventListener('keydown', (e) => {
   } else if (e.altKey) h = false;
   else switch (e.key) {
     case ' ': toggle(); break;
-    case 'Delete': case 'Backspace': del(); break;
+    case 'Delete': case 'Backspace': if (mSelOn && mSel.size && ltab === 'media') removeMediaMany([...mSel]); else del(); break;
     case 'ArrowLeft': pause(); seek(S.t - (e.shiftKey ? 10 : 1) * FRAME); break;
     case 'ArrowRight': pause(); seek(S.t + (e.shiftKey ? 10 : 1) * FRAME); break;
     case 'ArrowUp': case 'ArrowDown': {
@@ -1810,7 +1888,7 @@ $('#t-zoom').oninput = (e) => setZoom(+e.target.value);
 [video, spare].forEach((el) => { el.addEventListener('ended', () => { if (playing && cur && el === video) advance(cur); }); el.addEventListener('loadedmetadata', () => { if (el === video) updateStage(); }); });
 
 /* ============ 창을 닫으면 프로그램도 종료 ============ */
-let pingFail = 0; const ping = () => fetch('/api/ping').then(() => { pingFail = 0; }).catch(() => { if (++pingFail >= 2) showGone(); });
+const ping = () => fetch('/api/ping').catch(() => showGone());
 setInterval(ping, 5000); ping();
 addEventListener('focus', ping); document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
 addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } catch (e) {} });

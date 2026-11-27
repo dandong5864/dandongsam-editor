@@ -10,6 +10,24 @@ const { pipeline } = require('stream/promises');
 
 const PORT = +process.env.PORT || 5178;
 
+// ---- 지킴이: 편집기가 오류로 꺼지면 저절로 다시 켜요 (exe 실행 때만) ----
+if (process.env.AUTO_QUIT && !process.env.DDS_CHILD) {
+  let starts = [];
+  const run = (again) => {
+    const env = Object.assign({}, process.env, { DDS_CHILD: '1' });
+    if (again) env.NO_OPEN = '1';   // 다시 켤 때는 창을 또 열지 않아요 (열려 있는 창이 저절로 이어져요)
+    const c = spawn(process.execPath, process.argv.slice(1), { env, stdio: 'inherit', windowsHide: true });
+    c.on('exit', (code) => {
+      if (code === 0) return process.exit(0);   // 창을 닫아서 정상으로 끝난 경우
+      const now = Date.now(); starts = starts.filter((t) => now - t < 60000); starts.push(now);
+      if (starts.length > 5) return process.exit(1);   // 1분에 5번 넘게 꺼지면 멈춰요
+      setTimeout(() => run(true), 1000);
+    });
+  };
+  run(false);
+  return;
+}
+
 // ---- ffmpeg / ffprobe 경로 (npm 번들 → 없으면 시스템 설치본) ----
 let FFMPEG = 'ffmpeg', FFPROBE = 'ffprobe';
 try { const p = require('ffmpeg-static'); if (p && fs.existsSync(p)) FFMPEG = p; } catch (e) {}
@@ -22,7 +40,7 @@ const LEGACY_WS = path.join(ROOT, 'workspace');
 const DATA_ROOT = process.env.DSP_DATA || (process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir(), '단동샘편집기') : path.join(os.homedir(), '.dandongsam-editor'));
 const WS = path.join(DATA_ROOT, 'workspace');
 try {
-  if (!fs.existsSync(WS) && fs.existsSync(LEGACY_WS)) { fs.mkdirSync(DATA_ROOT, { recursive: true }); fs.cpSync(LEGACY_WS, WS, { recursive: true }); }
+  if (!fs.existsSync(WS) && fs.existsSync(LEGACY_WS)) { fs.mkdirSync(DATA_ROOT, { recursive: true }); copyDir(LEGACY_WS, WS); }
 } catch (e) { console.log('이전 작업 옮기기 실패:', e.message); }
 const DIRS = {
   media: path.join(WS, 'media'),
@@ -806,7 +824,17 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
 - "결과" 폴더에 만든 .dsp 파일 이름은 한글이어도 됩니다 (예: 내영상_편집.dsp).
 `;
 const SKILL_SRC = path.join(ROOT, '스킬', 'dandongsam-shorts-codex');   // 편집기에 들어 있는 AI용 스킬(작업 폴더에 복사해 줘요)
-function putSkill(dir) { try { if (fs.existsSync(SKILL_SRC)) fs.cpSync(SKILL_SRC, path.join(dir, '단동샘스킬'), { recursive: true, force: true }); } catch (e) {} }
+// 폴더 복사는 한 파일씩 직접 해요 (윈도우에서 한글 경로를 한꺼번에 복사하면 편집기가 통째로 꺼지는 경우가 있어요)
+function copyDir(src, dst) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    const a = path.join(src, e.name), b = path.join(dst, e.name);
+    if (e.isDirectory()) copyDir(a, b);
+    else if (e.isFile()) { try { const sa = fs.statSync(a), sb = fs.statSync(b); if (sa.size === sb.size && sb.mtimeMs >= sa.mtimeMs) continue; } catch (er) {} try { fs.copyFileSync(a, b); } catch (er) {} }
+  }
+}
+const skillDone = new Set();
+function putSkill(dir) { if (skillDone.has(dir)) return; try { if (fs.existsSync(SKILL_SRC)) { copyDir(SKILL_SRC, path.join(dir, '단동샘스킬')); skillDone.add(dir); } } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
   fs.writeFileSync(path.join(dir, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8');
@@ -897,7 +925,7 @@ function httpGet(url, redirects = 3) {
     const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 DandongsamEditor' }, timeout: 8000 }, (r) => {
       if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location && redirects > 0) { r.resume(); return resolve(httpGet(new URL(r.headers.location, url).href, redirects - 1)); }
       if (r.statusCode !== 200) { r.resume(); return reject(new Error('HTTP ' + r.statusCode)); }
-      const ch = []; r.on('data', (d) => ch.push(d)); r.on('end', () => resolve(Buffer.concat(ch).toString('utf8')));
+      const ch = []; r.on('data', (d) => ch.push(d)); r.on('end', () => resolve(Buffer.concat(ch).toString('utf8'))); r.on('error', reject);
     });
     req.on('timeout', () => { req.destroy(new Error('timeout')); }); req.on('error', reject);
   });
@@ -912,7 +940,7 @@ try { const t = fs.readFileSync(CRASH_LOG, 'utf8'); t.split('\n').filter(Boolean
 process.on('uncaughtException', (e) => {   // 갑자기 꺼질 때 남긴 기록은 다음에 켤 때 오류 보내기에 같이 담겨요
   try { fs.writeFileSync(CRASH_LOG, LOG_RING.concat(new Date().toTimeString().slice(0, 8) + ' CRASH ' + String(e && e.stack || e).slice(0, 1500)).join('\n')); } catch (e2) {}
   try { process.stderr.write(String(e && e.stack || e) + '\n'); } catch (e2) {}
-  process.exit(1);
+  ringPush('CRASH', [e]);   // 한 가지 작업이 잘못돼도 편집기는 꺼지지 않고 계속 켜져 있어요
 });
 process.on('unhandledRejection', (e) => ringPush('REJECT', [e]));
 // 개인 정보 가리기: 사용자 이름·집 폴더 경로
@@ -1059,7 +1087,7 @@ function httpPostForm(url, fields) {
   const body = new URLSearchParams(fields).toString();
   return new Promise((resolve, reject) => {
     const req = https.request(url, { method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0 DandongsamEditor', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }, timeout: 10000 }, (r) => {
-      r.resume(); (r.statusCode >= 200 && r.statusCode < 400) ? resolve(r.statusCode) : reject(new Error('HTTP ' + r.statusCode)); });
+      r.on('error', () => {}); r.resume(); (r.statusCode >= 200 && r.statusCode < 400) ? resolve(r.statusCode) : reject(new Error('HTTP ' + r.statusCode)); });
     req.on('timeout', () => req.destroy(new Error('timeout'))); req.on('error', reject); req.end(body);
   });
 }
@@ -1150,7 +1178,7 @@ function sttDownload() {
       if (r.statusCode !== 200) { r.resume(); stt.dl = { state: 'error', pct: 0, msg: '내려받지 못했어요 (HTTP ' + r.statusCode + '). 인터넷 연결을 확인해 주세요' }; return; }
       const total = +r.headers['content-length'] || 0; let got = 0; const ws = fs.createWriteStream(part);
       r.on('data', (d) => { got += d.length; if (total) stt.dl.pct = Math.min(99, Math.floor(got / total * 100)); stt.dl.msg = `내려받는 중… ${Math.round(got / 1048576)}MB`; });
-      r.pipe(ws);
+      r.pipe(ws); ws.on('error', (e) => { stt.dl = { state: 'error', pct: 0, msg: e.message }; });
       ws.on('finish', () => { try { fs.renameSync(part, STT_FILE); stt.dl = { state: 'done', pct: 100, msg: '준비 완료' }; } catch (e) { stt.dl = { state: 'error', pct: 0, msg: e.message }; } });
       r.on('error', (e) => { stt.dl = { state: 'error', pct: 0, msg: '연결이 끊겼어요: ' + e.message }; });
     }).on('error', (e) => { stt.dl = { state: 'error', pct: 0, msg: '인터넷에 연결할 수 없어요: ' + e.message }; });
@@ -1213,7 +1241,7 @@ if (process.env.AUTO_QUIT) {
     if (gap > 20000) { lastPing = now; byeAt = 0; return; }   // 컴퓨터가 잠들었다 깬 직후엔 화면이 다시 신호를 보낼 때까지 기다려요
     if (busy()) { byeAt = 0; return; }
     if (byeAt && now - byeAt > 10000) process.exit(0);
-    if (lastPing && now - lastPing > 1800000) process.exit(0);   // 30분 동안 아무 신호가 없을 때만 (창이 비정상으로 닫힌 경우)
+    if (lastPing && now - lastPing > 12 * 3600000) process.exit(0);   // 12시간 동안 아무 신호가 없을 때만 (창이 비정상으로 닫힌 경우)
   }, 3000).unref();
 }
 
