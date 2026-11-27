@@ -1,0 +1,10 @@
+interface:
+  display_name: 단동샘 모션그래픽
+  short_description: 대본·내레이션에 맞춰 단동샘 편집기용 모션그래픽(순서·숫자·비교·원리·핵심 문장·체크리스트)을 넣어요
+  default_prompt: $dandongsam-motion 으로 이 폴더의 영상(또는 대본·내레이션)에 맞는 모션그래픽을 넣어서 단동샘 편집기에서 열 수 있는 .dsp 를 결과 폴더에 만들어 줘.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - codex
+  allow_implicit_invocation: true

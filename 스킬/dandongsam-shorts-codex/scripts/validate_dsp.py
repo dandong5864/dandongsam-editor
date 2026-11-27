@@ -8,7 +8,7 @@ from _common import info, nfc
 FONTS = {'Cafe24 Ssurround', 'Cafe24 Dangdanghae', 'Cafe24 Danjunghae', 'Cafe24 Dongdong', 'Cafe24 Ohsquare', 'Cafe24 Syongsyong',
          'Cafe24 Supermagic OTF Bold', 'Kyobo Handwriting 2019', 'Ownglyph PDH Regular', 'omyu pretty', 'AndongKaturi',
          'Ownglyph yuntaeng Regular', 'insungit Cutelively jisu', 'KCC-Chassam', 'Single Day',
-         'NanumMyeongjo', 'NanumMyeongjo Bold', 'NanumMyeongjo ExtraBold'}
+         'NanumMyeongjo', 'NanumMyeongjo Bold', 'NanumMyeongjo ExtraBold', 'Black Han Sans', 'Do Hyeon'}
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('dsp'); ap.add_argument('--folder'); ap.add_argument('--settings'); a = ap.parse_args()
@@ -40,7 +40,11 @@ def main():
             err.append(f'media {k}: 폴더에 "{nm}" 파일이 없어요' + (f' (대소문자만 다른 파일: {near[0]})' if near else ' (이름·확장자·공백·괄호까지 똑같아야 해요)')); continue
         try: inf = info(p); dur[k] = inf['duration']; vert[k] = bool(inf.get('ratio') and inf['ratio'] < 1)
         except Exception as e: err.append(f'media {k}: 열 수 없어요 ({e})')
-    for x in clips + audio:
+    for x in clips:   # 모션그래픽 조각(mg)은 편집기가 영상으로 만들어요 → 길이(dur)만 확인
+        if isinstance(x.get('mg'), dict):
+            if not float(x.get('dur', 0) or 0) > 0: err.append(f"{x.get('id')}: 모션그래픽 조각에 dur(초)가 없어요")
+            x['in'], x['out'] = 0, float(x.get('dur', 0) or 0)
+    for x in [c for c in clips if not isinstance(c.get('mg'), dict)] + audio:
         k = x.get('mediaId')
         if k not in media: err.append(f"{x.get('id')}: mediaId '{k}' 가 media 에 없어요"); continue
         i, o = float(x.get('in', 0)), float(x.get('out', 0))
@@ -48,6 +52,7 @@ def main():
         if k in dur and o > dur[k] + 0.05: err.append(f"{x.get('id')}: out {o} 이 원본 길이 {dur[k]} 보다 길어요")
     for x in texts:
         if not float(x.get('start', 0)) < float(x.get('end', 0)): err.append(f"{x.get('id')}: start < end 이어야 해요")
+        if x.get('kind') == 'mg' and not isinstance(x.get('mg'), dict): err.append(f"{x.get('id')}: kind mg 에는 mg 설계도가 있어야 해요")
         if x.get('kind') in ('sub', 'text') and x.get('font') not in fonts: warn.append(f"{x.get('id')}: 글꼴 '{x.get('font')}' 은 목록에 없어요")
     if d.get('canvas') not in ('16:9', '9:16', 'original', '1:1', '4:3'): err.append(f"canvas 값이 이상해요: {d.get('canvas')}")
     vt = sum((float(c['out']) - float(c['in'])) / (float(c.get('speed', 1)) or 1) for c in clips if 'out' in c and 'in' in c)

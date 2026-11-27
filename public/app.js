@@ -456,6 +456,7 @@ function renderPipProps(p, x) {
   const upd = () => { renderTL(true); renderOv(true); syncPip(); saveLocal(); };
   p.append(E('div', 'sel-title', esc(m.name || '추가 미디어')));
   attrBar(p);
+  mgPropsSec(p, x, false);
   p.append(sec('크기·위치'));
   p.append(slider('너비', 5, 200, 0.5, x.w, (v) => v + '%', (v) => { x.w = v; x.h = Math.round(v * asp * 10) / 10; upd(); }, 40));
   p.append(slider('가로 위치', 0, 100, 0.5, x.x, (v) => v + '%', (v) => { x.x = v; upd(); }, 72));
@@ -473,7 +474,7 @@ function renderPipProps(p, x) {
   const r2 = E('div', 'row2');
   r2.append(timeBox('시작', x.start, (t) => { push(); const len = x.end - x.start; x.start = Math.max(0, t); x.end = x.start + len; changed(true); }), timeBox('끝', x.end, (t) => { push(); x.end = clamp(t, x.start + 0.1, x.start + Math.max(0.1, (m.duration || 1e9) - (x.in || 0))); changed(true); }));
   p.append(r2);
-  const br = E('div', 'btnrow'); const b2 = E('button', 'danger', '🗑 삭제'); b2.onclick = del; br.append(b2); p.append(br);
+  const br = E('div', 'btnrow'); const sw = E('button', '', '🔁 바꾸기'); sw.title = '자리와 시간은 그대로 두고 다른 영상·사진으로 바꿔요'; sw.onclick = () => swapMedia(x); const b2 = E('button', 'danger', '🗑 삭제'); b2.onclick = del; br.append(sw, b2); p.append(br);
 }
 
 /* ============ 미리보기 변형 ============ */
@@ -1101,7 +1102,7 @@ tlScroll.addEventListener('pointermove', (e) => {
     if (own && Math.abs(e.clientY - drag.y0) > 8) { hit = laneHit(own, e.clientY); if (hit.lane !== x.lane) x.lane = hit.lane; }
     renderTL(true); renderOv(true); snapLine(); if (hit) showIns(own, hit.line);
   } else if (drag.kind === 'ttr') {
-    if (Math.abs(dx) < 1 && !drag.pushed) return; need(); const x = drag.x; x.end = Math.round(Math.max(x.start + 0.1, snapT(drag.e0 + dx / S.zoom, x.id)) * 100) / 100; if (x.kind === 'pip') { const pm = S.media[x.mediaId]; if (pm && pm.duration && !pm.isImage) x.end = Math.min(x.end, Math.round((x.start + pm.duration - (x.in || 0)) * 100) / 100); } renderTL(true); renderOv(true); snapLine();
+    if (Math.abs(dx) < 1 && !drag.pushed) return; need(); const x = drag.x; x.end = Math.round(Math.max(x.start + 0.1, snapT(drag.e0 + dx / S.zoom, x.id)) * 100) / 100; if (x.kind === 'pip') { const pm = S.media[x.mediaId]; if (pm && pm.duration && !pm.isImage && !(pm.mg && x.mg)) x.end = Math.min(x.end, Math.round((x.start + pm.duration - (x.in || 0)) * 100) / 100); } renderTL(true); renderOv(true); snapLine();
   } else if (drag.kind === 'ttl') {
     if (Math.abs(dx) < 1 && !drag.pushed) return; need(); const x = drag.x; let ns = clamp(snapT(drag.s0 + dx / S.zoom, x.id), 0, x.end - 0.1); const pmI = x.kind === 'pip' && (S.media[x.mediaId] || {}).isImage; if (x.kind === 'pip' && !pmI) ns = Math.max(ns, drag.s0 - drag.in0); x.start = Math.round(ns * 100) / 100; if (x.kind === 'pip' && !pmI) x.in = Math.max(0, Math.round((drag.in0 + (x.start - drag.s0)) * 100) / 100); renderTL(true); renderOv(true); snapLine();
   } else if (drag.kind === 'amove') {
@@ -1117,7 +1118,7 @@ tlScroll.addEventListener('pointermove', (e) => {
   }
 });
 const endDrag = () => {
-  clearIns(); if (!drag) return; const d = drag; drag = null; $('#drop-line').style.display = 'none'; $('#snap-line').style.display = 'none';
+  clearIns(); if (!drag) return; const d = drag; drag = null; if (d.pushed && d.x && d.x.mg && d.x.kind === 'pip' && /^tt[rl]$/.test(d.kind)) setTimeout(() => mgRefit(d.x), 0); $('#drop-line').style.display = 'none'; $('#snap-line').style.display = 'none';
   if (d.kind === 'marq') { const mq = $('#marq'); if (mq) mq.remove(); if (!d.moved) { const rc = inner.getBoundingClientRect(); seek(clamp((d.x0 - rc.left) / S.zoom, 0, S.total || 1e9)); } else { renderProps(); toast(S.multi.length ? `${S.multi.length}개 선택했어요 · 끌면 같이 움직이고 Delete로 지워요` : '선택된 게 없어요', null, 2500); } return; }
   if (d.kind === 'mmove') { if (d.pushed) { changed(true); markMulti(); } return; }
   if ((d.kind === 'trimr' || d.kind === 'triml') && d.pushed && d.dur0 !== undefined) { layout(); const nd = dur(d.c) - d.dur0; if (nd >= 0) rippleAfter(d.c.start + d.dur0, nd); else if (d.kind === 'trimr') rippleRange(d.c.start + dur(d.c), d.c.start + d.dur0); else rippleRange(d.c.start, d.c.start - nd); }
@@ -1282,6 +1283,7 @@ function renderPropsSel(p, s) {
   p.append(E('div', 'sel-title', `${esc(m.name || '')}`));
   const upd = () => { layout(); renderTL(); updateStage(); saveLocal(); };
   attrBar(p);
+  if (s.type === 'v') mgPropsSec(p, c, true);
   if (s.type === 'v' && m.isImage) imgDur(p, c);
   if (s.type === 'v' && !m.isImage) {
     p.append(sec('소리'));
@@ -1977,7 +1979,7 @@ $('#btn-help').onclick = async () => {
 
 /* ============ 동영상 저장 / 열기 / 파일 ============ */
 const projData = () => JSON.parse(JSON.stringify({ clips: S.clips, audio: S.audio, texts: S.texts, bg: S.bg, tpl: S.tpl, canvas: S.canvas, zoom: S.zoom, trk: S.trk,
-  media: Object.fromEntries([...S.clips, ...S.audio].map((c) => c.mediaId).filter((v, i, ar) => ar.indexOf(v) === i).map((id) => [id, { name: (S.media[id] || {}).name, size: (S.media[id] || {}).size }])) }));
+  media: Object.fromEntries([...S.clips, ...S.audio, ...S.texts.filter((x) => x.kind === 'pip')].map((c) => c.mediaId).filter((v, i, ar) => ar.indexOf(v) === i).map((id) => [id, { name: (S.media[id] || {}).name, size: (S.media[id] || {}).size }])) }));
 const hhmm = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 function openedNote(j) { if (j && j.restoredFrom) toast(`파일이 망가져서 ${hhmm(j.restoredFrom)}에 백업한 상태로 열었어요`, null, 8000); }
 // 이전 상태로 되돌리기: 저장할 때마다 남겨 둔 백업 중에서 골라요
@@ -2013,7 +2015,7 @@ function normalizeProject(d) {
   const clips = (d.clips || []).map((c) => { const q = Object.assign({}, dflt(), c); q.id = uid(c.id); q.mediaId = mid(c); q.in = num(c.in, 0); q.out = num(c.out, 0); q.speed = num(c.speed, 1) || 1; q.vol = num(c.vol, 100); return q; }).filter((c) => c.out > c.in);
   const audio = (d.audio || []).map((c) => { const q = Object.assign({ vol: 100 }, c); q.id = uid(c.id); q.mediaId = mid(c); q.start = Math.max(0, num(c.start, 0)); q.in = num(c.in, 0); q.out = num(c.out, 0); q.vol = num(c.vol, 100); return q; }).filter((c) => c.out > c.in);
   const font0 = (S.fonts[0] && S.fonts[0].family) || 'sans-serif';
-  const texts = (d.texts || []).map((t) => { const kind = ['text', 'sub', 'sticker', 'shape', 'fx', 'zoom'].includes(t.kind) ? t.kind : (t.kind === 'title' || t.kind === 'caption' ? (t.kind === 'title' ? 'text' : 'sub') : 'sub'); const isT = kind === 'text';
+  const texts = (d.texts || []).map((t) => { const kind = ['text', 'sub', 'sticker', 'shape', 'fx', 'zoom', 'pip', 'bg'].includes(t.kind) ? t.kind : (t.kind === 'title' || t.kind === 'caption' ? (t.kind === 'title' ? 'text' : 'sub') : 'sub'); const isT = kind === 'text';
     const q = Object.assign({ colors: [], color: '#ffffff', font: font0, size: isT ? 90 : 86, outline: 8, outlineColor: '#000000', x: 50, y: isT ? 42 : 81 }, t); q.kind = kind; q.id = uid(t.id); q.text = String(t.text === undefined || t.text === null ? '' : t.text); q.start = Math.max(0, num(t.start, 0)); q.end = num(t.end, q.start + 2); if (q.end <= q.start) q.end = q.start + 2; if (!Array.isArray(q.colors)) q.colors = []; return q; });
   let tpl = d.tpl; const TD = { top: 22, bottom: 22, topColor: '#000000', midColor: '#000000', botColor: '#000000', fitMid: false };
   if (typeof tpl === 'string') { const k = tpl.replace(/\s/g, ''); const f = [...TPLS, ...myTpls()].find((x) => x.n.replace(/\s/g, '') === k); tpl = f ? { ...f.v } : (/없|none|null/i.test(k) ? null : { ...TPLS[0].v }); }
@@ -2054,10 +2056,11 @@ function relinkDialog(miss) {
   });
 }
 function loadProjectData(d) {
+  if (d && !d.__mgDone && mgNeeds(d)) { d.__mgDone = true; if (d.__job) S.mgJob = d.__job; mgPrepare(d).then(() => loadProjectData(d)); return; }
   const fitTpl = !!(d && d.__fitTpl); d = normalizeProject(d); d.__fitTpl = fitTpl;
   const mp = d.media || {}, map = {};   // 다른 컴퓨터/폴더에서 온 파일은 이름·크기가 같은 파일로 연결
   Object.keys(mp).forEach((id) => { if (S.media[id]) { map[id] = id; return; } const f = Object.values(S.media).find((m) => m.name === mp[id].name && (!mp[id].size || m.size === mp[id].size)) || Object.values(S.media).find((m) => m.name === mp[id].name) || Object.values(S.media).find((m) => lk(m.name) && lk(m.name) === lk(mp[id].name)); if (f) map[id] = f.id; });
-  const usedIds = new Set([...(d.clips || []), ...(d.audio || [])].map((c) => c.mediaId));
+  const usedIds = new Set([...(d.clips || []), ...(d.audio || []), ...(d.texts || []).filter((t) => t.kind === 'pip')].map((c) => c.mediaId));
   const lost = Object.keys(mp).filter((id) => !map[id] && !S.media[id] && usedIds.has(id)).map((id) => ({ id, name: mp[id].name || id }));
   if (lost.length && !d.__relinked) { relinkDialog(lost).then((got) => { d.__relinked = true; if (got) Object.assign(map, got); finishLoad(d, map); }); return; }
   finishLoad(d, map);
@@ -2085,6 +2088,7 @@ function fitTplMid() {   // 쇼츠 템플릿이 있으면 영상 위·아래 끝
 }
 function finishLoad(d, map) {
   let miss = 0; const fix = (l) => (l || []).filter((c) => { const t = map[c.mediaId] || (S.media[c.mediaId] ? c.mediaId : null); if (!t) { miss++; return false; } c.mediaId = t; return true; });
+  d.texts = (d.texts || []).filter((x) => { if (x.kind !== 'pip') return true; const t = map[x.mediaId] || (S.media[x.mediaId] ? x.mediaId : null); if (!t) { miss++; return false; } x.mediaId = t; return true; });
   push(); S.clips = fix(d.clips); S.audio = fix(d.audio); S.pm = new Set([...Object.values(map), ...S.clips.map((c) => c.mediaId), ...S.audio.map((c) => c.mediaId)].filter((id) => S.media[id])); S.texts = d.texts || []; S.bg = nb(d.bg); S.tpl = d.tpl || null; S.canvas = d.canvas || 'original'; S.sel = null; S.t = 0;
   if (d.__fitTpl) fitTplMid();
   changed(true); fitAll(); if (S.canvas) { const sc = $('#sel-canvas'); if (sc) sc.value = S.canvas; }
@@ -2160,7 +2164,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     const r = await post('/api/auto/open', { file: it.file });
     if (r.error) return toast(r.error, null, 6000);
     (r.media || []).forEach((m) => { S.media[m.id] = m; });
-    closeModal(); curProj = null; r.data.__fitTpl = true; loadProjectData(r.data);   // AI가 만든 결과: 쇼츠 템플릿 가운데 칸에 맞춰 열어요
+    closeModal(); curProj = null; r.data.__fitTpl = true; r.data.__job = r.job; S.mgJob = r.job || null; loadProjectData(r.data);   // AI가 만든 결과: 쇼츠 템플릿 가운데 칸에 맞춰 열어요
     if (r.missing && r.missing.length) toast(`폴더에서 ${r.missing.length}개를 찾지 못했어요: ${r.missing.join(', ')}`, null, 9000);
     else if (r.linked && r.linked.length) toast(`이름이 달라도 ${r.linked.length}개를 알아서 이어 붙였어요`, null, 5000);
   }
@@ -2225,6 +2229,16 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const VNAME = { female: 'ko-KR-SunHiNeural', male: 'ko-KR-InJoonNeural' }, voiceKey = VNAME[opt.voice] ? opt.voice : 'none';
       if (mode !== 'text') row3('목소리', VOICES, voiceKey, (k) => { opt.voice = k; });
       const voice = mode !== 'text' && VNAME[voiceKey] ? { name: VNAME[voiceKey], rate: ratio === '9:16' ? '+10%' : '+0%' } : null;
+      // 제작 모드: 모션그래픽을 넣을지, 어떻게 섞을지 (모션그래픽스킬/SKILL.md 가 이 값을 읽어요)
+      const MMODES = [['off', '🎬 일반', '지금처럼 컷 편집과 자막만 (모션그래픽 없이)'], ['mix', '🎥 촬영+모션', '직접 찍은 영상 위에 필요한 곳만 모션그래픽을 덮어요'], ['only', '✨ 모션만', '영상 없이 대본·내레이션에 맞춰 모션그래픽만으로 만들어요'], ['multi', '🧩 복합', '폴더에 넣어 둔 실사·AI 영상·사진과 모션그래픽을 섞어요']];
+      const mmode = mode !== 'text' && MMODES.some((m) => m[0] === opt.mg) ? opt.mg : 'off';
+      const mgSty = opt.mgStyle && (opt.mgStyle === 'auto' || MG.STYLES[opt.mgStyle]) ? opt.mgStyle : 'auto', mgAmt = ['low', 'mid', 'high'].includes(opt.mgAmt) ? opt.mgAmt : 'mid';
+      if (mode !== 'text') row3('제작 모드', MMODES, mmode, (k) => { opt.mg = k; });
+      if (mmode !== 'off') {
+        row3('모션 스타일', [['auto', '🤖 AI가 고르기', '영상 내용을 보고 AI가 골라요'], ...Object.entries(MG.STYLES).map(([k, v]) => [k, v.n, v.tip])], mgSty, (k) => { opt.mgStyle = k; });
+        if (mmode !== 'only') row3('모션 비중', [['low', '적게', '1분에 1~2개'], ['mid', '보통', '1분에 2~3개'], ['high', '많이', '1분에 4~5개']], mgAmt, (k) => { opt.mgAmt = k; });
+      }
+      const motion = mmode === 'off' ? null : { mode: mmode, style: mgSty, amount: mmode === 'only' ? null : mgAmt };
       const LAND = ratio !== '9:16';   // 가로(롱폼)는 글자 크기 기준이 달라 훨씬 작게 잡아요
       const SUBDEF = { kind: 'sub', font: 'Cafe24 Ssurround', size: LAND ? 34 : 86, color: '#ffffff', outline: LAND ? 4 : 7, outlineColor: '#000000', x: 50, y: LAND ? 88 : 70 };
       const TITLEDEF = { kind: 'text', font: 'Cafe24 Ssurround', size: 90, color: '#ffffff', colors: ['#ffffff', '#FFFD00'], outline: 8, outlineColor: '#000000', x: 50, y: 16, lines: 2 };
@@ -2248,7 +2262,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const settings = { 설명: '단동샘 편집기가 만든 편집 설정입니다. 편집파일_만드는법.txt 의 [편집설정.json] 설명대로 따라 주세요.', canvas: ratio,
         tpl: ratio === '9:16' ? (tplKey === 'none' ? null : { ...(tplKey[0] === 't' ? TPLS[+tplKey.slice(1)].v : tpls[+tplKey.slice(1)].v) }) : null,
         title: ratio === '9:16' && titleKey !== 'none' ? styleOfKey(titleKey, titles, TITLEDEF) : null,
-        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: opt.split === 'fast' ? 'fast' : 'slow', lecture, stepCard, genre: lecture ? 'lecture' : (genre === 'none' ? null : genre), mode, voice };
+        portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: opt.split === 'fast' ? 'fast' : 'slow', lecture, stepCard, genre: lecture ? 'lecture' : (genre === 'none' ? null : genre), mode, voice, motion };
       post('/api/auto/settings', { path: sel.path, settings });
       const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); dz.append(w); };
       const dz = E('div'), dOpen = ld('vtk.autodesign', '0') === '1';   // 꾸미기(템플릿·제목·자막·자막 나누기)는 접어 두고 고른 것만 한 줄로 보여 줘요
@@ -2273,10 +2287,13 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const GENRE_RULE = settings.genre ? ` 이 영상은 "${gName}" 영상이야. 폴더 안 "단동샘스킬/장르/${GFILE[settings.genre]}.md"를 읽고 그 규칙대로 만들어 줘.` : '';
       const GENRE_GPT = settings.genre ? ` 이 영상은 "${gName}" 영상이야. 첨부한 "${GFILE[settings.genre]}.md"를 읽고 그 규칙대로 만들어 줘.` : '';
       const VOICE_RULE = voice ? ' 내레이션은 내 목소리 대신 AI 목소리로 넣어 줘: 대본을 한 줄에 한 문장씩 "결과/대본.txt"로 저장한 뒤, "단동샘스킬/SKILL.md"의 "AI 목소리" 순서대로 단동샘스킬/scripts/narrate.py 를 실행해 이 폴더에 "내레이션.mp3"를 만들고(목소리·빠르기는 편집설정.json 의 voice), audio 에 넣어 줘. 영상 조각은 소리를 끄고 내레이션 길이에 맞춰 이어 붙이고, 자막은 narrate.py 가 만든 단어 시각으로 만들어 줘. 파이썬 실행이나 인터넷이 안 되면 대본.txt 만 저장하고 알려 줘.' : '';
-      const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + VOICE_RULE + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
+      const MG_WHAT = { mix: '촬영 영상 위에 필요한 곳만 모션그래픽을 덮어(texts 의 kind "mg")', only: '영상 파일 없이 내레이션(또는 AI 목소리)에 맞춰 장면마다 모션그래픽 조각(clips 의 mg)으로 영상 전체를', multi: '폴더에 있는 실사·AI 영상·사진 조각과 모션그래픽 조각(clips 의 mg)을 섞어' };
+      const MOTION_RULE = motion ? ` 이번엔 모션그래픽도 넣어 줘: ${MG_WHAT[motion.mode]} 만들어 줘. 폴더 안 "모션그래픽스킬/SKILL.md"(스킬 목록에 $dandongsam-motion 이 있으면 그것)를 읽고, "편집설정.json"의 motion 값(제작 모드·스타일·비중)과 "편집파일_만드는법.txt"의 [모션그래픽] 규격대로 .dsp 에 모션그래픽 설계도(mg)만 적어 줘. 모션그래픽 영상 파일은 직접 만들지 마(편집기가 열 때 만들어). 같은 모양을 연달아 쓰지 말고, 대본에 없는 숫자는 지어내지 마.` : '';
+      const MOTION_GPT = motion ? MOTION_RULE.replace('폴더 안 "모션그래픽스킬/SKILL.md"(스킬 목록에 $dandongsam-motion 이 있으면 그것)', '첨부한 모션그래픽 "SKILL.md"').replace(' 모션그래픽 영상 파일은 직접 만들지 마(편집기가 열 때 만들어).', ' 모션그래픽 영상 파일이나 HTML 은 만들지 마(편집기가 열 때 만들어).') : '';
+      const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + VOICE_RULE + MOTION_RULE + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
         codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
-        gpt: { name: 'ChatGPT', how: `채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json", "받아적기" 폴더 안의 파일${settings.genre ? `, "단동샘스킬/장르/${GFILE[settings.genre]}.md"` : ''}을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.`, prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. 첨부한 ".words.json" 파일(받아적기)이 있으면 음성 인식을 따로 하지 말고 그 단어 시각으로 말 없는 구간·군말·되풀이한 말을 잘라 영상을 여러 조각(clips 의 in/out)으로 나누고, 자막도 그 시각으로 만들어 줘. 받아적기 파일이 없고 소리를 알아들을 수 없으면 자막을 지어내지 말고 알려 줘. media 의 name 은 첨부한 영상 파일 이름 그대로(경로 없이) 쓰고, .dsp 는 설명(//) 없는 순수 JSON 으로, 시간은 초 단위 숫자로 써 줘. ${GENRE_RULE ? tail.replace(GENRE_RULE, GENRE_GPT) : tail}` },
+        gpt: { name: 'ChatGPT', how: `채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json", "받아적기" 폴더 안의 파일${settings.genre ? `, "단동샘스킬/장르/${GFILE[settings.genre]}.md"` : ''}${motion ? ', "모션그래픽스킬/SKILL.md"' : ''}을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.`, prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. 첨부한 ".words.json" 파일(받아적기)이 있으면 음성 인식을 따로 하지 말고 그 단어 시각으로 말 없는 구간·군말·되풀이한 말을 잘라 영상을 여러 조각(clips 의 in/out)으로 나누고, 자막도 그 시각으로 만들어 줘. 받아적기 파일이 없고 소리를 알아들을 수 없으면 자막을 지어내지 말고 알려 줘. media 의 name 은 첨부한 영상 파일 이름 그대로(경로 없이) 쓰고, .dsp 는 설명(//) 없는 순수 JSON 으로, 시간은 초 단위 숫자로 써 줘. ${(GENRE_RULE ? tail.replace(GENRE_RULE, GENRE_GPT) : tail).replace(MOTION_RULE || '\u0000', MOTION_GPT)}` },
         claude: { name: 'Claude 앱', how: 'Claude 앱에서 이 폴더를 연결한 뒤 아래 말을 보내요.', prompt: `"${P}" 폴더에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 폴더 안의 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 폴더에 접근할 수 없으면 추측하지 말고 먼저 알려 줘.` },
         cc: { name: 'Claude Code', how: '아래 버튼으로 이 폴더에서 Claude Code 를 열고 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.`, term: true },
       };
@@ -2327,6 +2344,13 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
           const box = E('div', 'abox'); box.textContent = r.text; box.style.whiteSpace = 'pre-wrap'; box.style.maxHeight = '320px'; box.style.overflow = 'auto'; box.hidden = !skillOpen;
           vb.onclick = () => { skillOpen = !skillOpen; box.hidden = !skillOpen; vb.textContent = skillOpen ? '📖 스킬 접기' : '📖 스킬 보기'; };
           br.append(vb, fb); sk.append(br, box);
+          if (r.motion && motion) {   // 모션그래픽을 넣을 때만: 따로 떨어진 모션그래픽 스킬
+            const ml = E('div', 'apath', esc('🎬 모션그래픽스킬 · 파일 ' + r.motion.files.length + '개')); ml.title = r.motion.dir + '\n' + r.motion.files.join('\n'); sk.append(ml);
+            const mb = E('div', 'abtns'), mv = E('button', '', '📖 스킬 보기'), mf = E('button', '', '📁 스킬 폴더 열기'); mv.title = '모션그래픽 SKILL.md 내용 보기';
+            const mbox = E('div', 'abox'); mbox.textContent = r.motion.text; mbox.style.whiteSpace = 'pre-wrap'; mbox.style.maxHeight = '320px'; mbox.style.overflow = 'auto'; mbox.hidden = true;
+            mv.onclick = () => { mbox.hidden = !mbox.hidden; mv.textContent = mbox.hidden ? '📖 스킬 보기' : '📖 스킬 접기'; }; mf.onclick = async () => { const z = await post('/api/auto/openfolder', { path: r.motion.dir }); if (z.error) toast(z.error); };
+            mb.append(mv, mf); sk.append(mb, mbox);
+          }
         }).catch(() => {});
       }
       // 결과
@@ -2712,6 +2736,9 @@ function renderFxProps(p, x) {
   p.append(r2);
 }
 function buildFxTab(d) {
+  d.append(sec('모션그래픽'));
+  { const r = E('div', 'chips wide2'); Object.entries(MG.TYPES).forEach(([k, v]) => { const b = E('button', 'chip', v.ico + ' ' + v.n); b.title = v.tip; b.onclick = () => mgDialog({ type: k }, (s, len) => mgAdd(s, len)); r.append(b); }); d.append(r); }
+  { const ml = S.texts.filter((x) => x.kind === 'pip' && x.mg).sort((a, b) => a.start - b.start); if (ml.length) { d.append(E('h4', '', '넣은 모션그래픽')); ml.forEach((x) => { const row = E('div', 'titem' + (isSel('t', x.id) ? ' sel' : '')); row.append(E('span', 'tm', fmt(x.start, 1)), E('span', 'tx', esc(MG.label(x.mg)))); row.onclick = () => { select('t', x.id); seek(x.start + 0.01); }; d.append(row); }); } }
   d.append(sec('모자이크 · 블러 (가릴 부분)'));
   const r = E('div', 'chips wide2'); const m1 = E('button', 'chip', '▦ 모자이크 추가'), m2 = E('button', 'chip', '🌫 블러 추가'); m1.onclick = () => addFx('mosaic'); m2.onclick = () => addFx('blur'); r.append(m1, m2); d.append(r);
   d.append(sec('확대 효과')); const zr = E('div', 'chips wide2'); const zb = E('button', 'chip', '＋ 추가'); zb.onclick = addZoom; zr.append(zb); d.append(zr);
@@ -2930,5 +2957,133 @@ function renderShapeProps(p, x) {
   const mvEnd = () => { showGuides(); if (!mv) return; const d = mv; mv = null; busy = false; if (d.pushed) changed(true); };
   stage.addEventListener('pointerup', mvEnd); stage.addEventListener('pointercancel', mvEnd);
 })();
+/* ============ 🎬 모션그래픽 (motion.js 가 그리고, 여기서 타임라인에 올려요) ============ */
+MG.fontList = () => S.fonts;
+// 모션그래픽을 그릴 크기: 영상 모양(짧은 변 1080) 기준. 쇼츠 색 띠가 있으면 겹친 영상은 가운데 칸 크기로 만들어요(띠·제목을 가리지 않게)
+function mgBox(asClip) {
+  const r = canvasRatio(), ev = (v) => Math.max(64, Math.round(v / 2) * 2);
+  const W0 = ev(r >= 1 ? 1080 * r : 1080), H0 = ev(r >= 1 ? 1080 : 1080 / r), tp = tplOn();
+  const sub = S.texts.find((q) => q.kind === 'sub'), subY = sub ? clamp(+sub.y || 70, 30, 98) / 100 : (r >= 1 ? 0.88 : 0.7);
+  if (!tp || (!+tp.top && !+tp.bottom)) return { W: W0, H: H0, pad: { T: 0.08, B: Math.min(0.78, subY - 0.06) }, pip: { x: 50, y: 50, w: 100, h: Math.round(H0 / W0 * 1000) / 10 } };
+  const top = clamp(+tp.top || 0, 0, 45) / 100, bot = clamp(+tp.bottom || 0, 0, 45) / 100;
+  if (asClip) return { W: W0, H: H0, pad: { T: top + 0.05, B: Math.min(1 - bot - 0.04, subY - 0.05) }, pip: null };
+  const H = ev(H0 * (1 - top - bot)), subIn = (subY - top) / Math.max(0.05, 1 - top - bot);
+  return { W: W0, H, pad: { T: 0.08, B: clamp(Math.min(0.8, subIn - 0.08), 0.45, 0.85) }, pip: { x: 50, y: Math.round((top + (1 - top - bot) / 2) * 1000) / 10, w: 100, h: Math.round(H / W0 * 1000) / 10 } };
+}
+let mgBusy = 0;
+function mgProgress() {   // 오른쪽 아래 작은 진행 표시
+  let el = $('#mg-prog'); if (!el) { el = E('div', 'up'); el.id = 'mg-prog'; el.innerHTML = '<div></div><div class="bar"><i></i></div>'; $('#uploads').append(el); }
+  return { set: (txt, p) => { el.firstChild.textContent = txt; $('i', el).style.width = Math.round(p * 100) + '%'; }, done: () => el.remove() };
+}
+async function mgMake(spec, len, opts) {   // 설계도 → 영상 파일(미디어). 실패하면 null
+  opts = opts || {}; const box = mgBox(opts.asClip), g = MG.normalize(spec); let html = null;
+  if (g.html) { const jb = opts.job || S.mgJob; if (!jb) { toast('모션그래픽 HTML은 AI 작업 폴더에서 연 결과에서만 만들 수 있어요', null, 6000); return null; }
+    const r = await fetch('/api/mg/html?job=' + encodeURIComponent(jb) + '&f=' + encodeURIComponent(g.html)).then((x) => x.json()).catch(() => ({ error: '서버에 연결할 수 없어요' }));
+    if (r.error) { toast(r.error, null, 7000); return null; } html = r.html; }
+  mgBusy++; const pg = mgProgress(), nm = opts.title || MG.label(g);
+  try { const m = await MG.render(g, { W: box.W, H: box.H, pad: box.pad, dur: len, fps: 30, job: opts.job || S.mgJob, html, onProgress: (p) => pg.set('🎬 ' + nm + ' 만드는 중', p) });
+    if (m) S.media[m.id] = m; return m ? { m, box } : null;
+  } catch (e) { toast('모션그래픽을 만들지 못했어요: ' + e.message, null, 8000); return null; }
+  finally { mgBusy--; pg.done(); }
+}
+// .dsp 를 열기 전에: 설계도(mg)만 있고 영상이 아직 없는 항목을 영상으로 만들어 이어요
+function mgLift(d) {   // AI가 mg 묶음 없이 항목에 바로 적었을 때도 알아들어요 ({"kind":"mg","type":"steps",...})
+  const KEYS = ['type', 'tpl', 'style', 'title', 'items', 'at', 'text', 'value', 'label', 'from', 'left', 'right', 'win', 'clear', 'html'];
+  const lift = (x) => { if (!x || typeof x !== 'object' || (x.mg && typeof x.mg === 'object')) return; if (typeof x.mg === 'string') { x.mg = /\.html?$/i.test(x.mg) ? { html: x.mg } : { type: x.mg }; return; } const o = {}; KEYS.forEach((k) => { if (x[k] !== undefined && !(k === 'text' && x.kind !== 'mg' && !x.type)) o[k] = x[k]; }); x.mg = o; };
+  (d.texts || []).forEach((t) => { if (t && (t.kind === 'mg' || t.kind === 'motion')) { t.kind = 'mg'; lift(t); } });
+  (d.clips || []).forEach((c) => { if (c && (c.kind === 'mg' || c.type === 'mg' || typeof c.mg === 'string')) { if (c.type === 'mg') delete c.type; lift(c); } });
+}
+function mgNeeds(d) {
+  mgLift(d);
+  const has = (x) => x && x.mg && typeof x.mg === 'object';
+  return (d.clips || []).some((c) => has(c) && !S.media[c.mediaId]) || (d.texts || []).some((t) => has(t) && (t.kind === 'mg' || !S.media[t.mediaId]));
+}
+async function mgPrepare(d) {
+  const clips = (d.clips || []).filter((c) => c && c.mg && typeof c.mg === 'object' && !S.media[c.mediaId]);
+  const texts = (d.texts || []).filter((t) => t && t.mg && typeof t.mg === 'object' && (t.kind === 'mg' || !S.media[t.mediaId]));
+  const all = clips.length + texts.length; if (!all) return; let k = 0, fail = 0;
+  if (d.canvas && !S.clips.length) S.canvas = d.canvas;   // 크기 계산이 새 영상 모양을 따르게
+  if (d.tpl !== undefined) S.tpl = d.tpl && typeof d.tpl === 'object' ? d.tpl : S.tpl;
+  for (const c of clips) {
+    k++; const len = clamp(+c.dur || (+c.out - +c.in) || 4, 0.5, 120), r = await mgMake(c.mg, len, { asClip: true, job: d.__job, title: `모션그래픽 ${k}/${all}` });
+    if (!r) { fail++; c.__drop = true; continue; } c.mediaId = r.m.id; c.in = 0; c.out = Math.round(r.m.duration * 100) / 100; c.fit = 'contain'; c.scale = c.scale || 100; c.mute = true; c.vol = 0;
+  }
+  for (const t of texts) {
+    k++; const st = Math.max(0, +t.start || 0), en = +t.end > st ? +t.end : st + 4, r = await mgMake(t.mg, en - st, { job: d.__job, title: `모션그래픽 ${k}/${all}` });
+    if (!r) { fail++; t.__drop = true; continue; }
+    Object.assign(t, { kind: 'pip', mediaId: r.m.id, in: 0, start: st, end: Math.round((st + r.m.duration) * 100) / 100, text: '', vol: 0, opacity: t.opacity == null ? 100 : t.opacity }, t.x == null || t.w == null ? r.box.pip : {});
+  }
+  d.clips = (d.clips || []).filter((c) => !c.__drop); d.texts = (d.texts || []).filter((t) => !t.__drop);
+  if (fail) toast(`모션그래픽 ${fail}개를 만들지 못해 빼고 열었어요`, null, 8000);
+}
+// 길이를 바꾸면 그 길이에 맞춰 다시 만들어요 (애니메이션이 중간에 잘리지 않게)
+async function mgRefit(x) {
+  const m = S.media[x.mediaId], len = Math.round((x.end - x.start) * 100) / 100; if (!x.mg || len < 0.3) return;
+  if (m && Math.abs(m.duration - len) < 0.06 && !(+x.in > 0.01)) return;
+  const r = await mgMake(x.mg, len); if (!r) return; push(); x.mediaId = r.m.id; x.in = 0; x.end = Math.round((x.start + r.m.duration) * 100) / 100; changed(true); toast('길이에 맞춰 모션그래픽을 다시 만들었어요');
+}
+// 직접 만들기·고치기 창
+function mgDialog(spec0, onDone) {
+  const g = MG.normalize(spec0 || { type: 'steps' }); let type = g.type, style = g.style, clear = g.clear;
+  const d = E('div', 'dlg mg-dlg', '<h2>🎬 모션그래픽</h2>'); const body = E('div'); d.append(body);
+  const val = { title: g.title, items: g.items.join('\n'), text: g.text, value: g.value, label: g.label, lv: [g.left.label, g.left.value, g.left.text], rv: [g.right.label, g.right.value, g.right.text], dur: spec0 && spec0.__len ? spec0.__len : 5 };
+  const cv = E('canvas', 'mg-pv'); const box = mgBox(); const pw = 360; cv.width = pw; cv.height = Math.round(pw * box.H / box.W); if (cv.height > 400) { cv.height = 400; cv.width = Math.round(400 * box.W / box.H); }
+  let raf = 0, t0 = performance.now();
+  const spec = () => { const s = { type, style, clear, title: val.title.trim() };
+    if (type === 'steps' || type === 'flow' || type === 'list') s.items = val.items.split('\n').map((q) => q.trim()).filter(Boolean);
+    if (type === 'quote') { s.text = val.text.trim(); s.label = val.label.trim(); }
+    if (type === 'number') { s.value = val.value.trim(); s.label = val.label.trim(); }
+    if (type === 'compare') { s.left = { label: val.lv[0], value: val.lv[1], text: val.lv[2] }; s.right = { label: val.rv[0], value: val.rv[1], text: val.rv[2] }; }
+    return s; };
+  const loop = () => { const len = clamp(+val.dur || 5, 1, 60), t = ((performance.now() - t0) / 1000) % (len + 0.6); const sc = cv.width / box.W, c = cv.getContext('2d'); c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); cv.style.background = clear ? 'repeating-conic-gradient(#666 0 25%, #888 0 50%) 0 0/20px 20px' : 'none'; c.scale(sc, sc);
+    MG.frame(c, box.W, box.H, MG.normalize(spec()), Math.min(t, len), len, box.pad); c.restore(); raf = modal.classList.contains('on') && document.body.contains(cv) ? requestAnimationFrame(loop) : 0; };
+  const field = (lab, v, set, area, tip) => { const w = E('div', 'f'); if (tip) w.title = tip; w.append(E('label', '', lab)); const i = E(area ? 'textarea' : 'input'); if (!area) i.type = 'text'; else i.rows = 4; i.value = v; i.onkeydown = (e) => e.stopPropagation(); i.oninput = () => set(i.value); w.append(i); return w; };
+  const draw = () => {
+    body.innerHTML = '';
+    const top = E('div', 'mg-top'); const left = E('div', 'mg-l'), right = E('div', 'mg-r'); top.append(left, right); body.append(top);
+    left.append(cv);
+    const tc = chips(Object.entries(MG.TYPES).map(([k, v]) => [k, v.ico + ' ' + v.n]), type, (k) => { type = k; draw(); }); tc.classList.add('wrapchips'); [...tc.children].forEach((b, i) => { b.title = Object.values(MG.TYPES)[i].tip; });
+    right.append(E('div', 'dim', '모양'), tc);
+    const sc = chips(Object.entries(MG.STYLES).map(([k, v]) => [k, v.n]), style, (k) => { style = k; draw(); }); sc.classList.add('wrapchips'); [...sc.children].forEach((b, i) => { b.title = Object.values(MG.STYLES)[i].tip; });
+    right.append(E('div', 'dim', '스타일'), sc);
+    const bc = chips([[0, '배경 있음'], [1, '투명 (영상 위에)']], clear ? 1 : 0, (v) => { clear = !!v; draw(); }); bc.children[1].title = '바탕 없이 영상 위에 겹쳐 보여요'; right.append(bc);
+    const fz = E('div', 'mg-fields'); body.append(fz);
+    fz.append(field('제목', val.title, (v) => { val.title = v; }, false, type === 'quote' ? '없어도 돼요' : '강조할 말은 [ ] 로 감싸요'));
+    if (type === 'steps' || type === 'flow' || type === 'list') fz.append(field('내용', val.items, (v) => { val.items = v; }, true, '한 줄에 하나씩 적어요. 강조할 말은 [ ] 로 감싸요'));
+    if (type === 'quote') fz.append(field('문장', val.text, (v) => { val.text = v; }, true, '강조할 말은 [ ] 로 감싸요. 예) 물은 [하루 2리터]'), field('위쪽 작은 글', val.label, (v) => { val.label = v; }, false, '예) 핵심 · 없어도 돼요'));
+    if (type === 'number') fz.append(field('숫자', val.value, (v) => { val.value = v; }, false, '예) 73%, 1,200원 · 숫자는 0부터 올라가며 세어져요'), field('설명', val.label, (v) => { val.label = v; }));
+    if (type === 'compare') { const r2 = E('div', 'row2'); const a = E('div'), b = E('div');
+      ['이름', '숫자', '설명'].forEach((lab, i) => { a.append(field('왼쪽 ' + lab, val.lv[i] || '', (v) => { val.lv[i] = v; }, i === 2, i ? '없어도 돼요' : '')); b.append(field('오른쪽 ' + lab, val.rv[i] || '', (v) => { val.rv[i] = v; }, i === 2, i ? '없어도 돼요' : '')); }); r2.append(a, b); fz.append(r2); }
+    fz.append(field('길이(초)', String(val.dur), (v) => { val.dur = v; }));
+    const acts = E('div', 'acts'); const no = E('button', '', '닫기'), ok = E('button', 'primary', spec0 && spec0.__edit ? '🔄 다시 만들기' : '＋ 넣기'); no.onclick = closeModal;
+    ok.onclick = async () => { ok.disabled = true; const s = spec(), len = clamp(+val.dur || 5, 0.5, 120); closeModal(); onDone(s, len); };
+    acts.append(no, ok); body.append(acts);
+  };
+  draw(); openModal(d); if (!raf) raf = requestAnimationFrame(loop);
+}
+async function mgAdd(spec, len) {   // 지금 재생 위치에 겹친 영상으로 올려요
+  const at = S.t, r = await mgMake(spec, len); if (!r) return;
+  push(); const x = Object.assign({ id: nid(), kind: 'pip', mediaId: r.m.id, in: 0, start: Math.round(at * 100) / 100, end: Math.round((at + r.m.duration) * 100) / 100, text: '', vol: 0, opacity: 100, mg: spec }, r.box.pip);
+  S.texts.push(x); S.sel = { type: 't', id: x.id }; changed(true); seek(x.start + 0.01, true); toast('모션그래픽을 넣었어요');
+}
+function mgPropsSec(p, x, isClip) {   // 선택한 모션그래픽 고치기
+  if (!x.mg) return; p.append(sec('모션그래픽'));
+  const br = E('div', 'btnrow'); const eb = E('button', 'primary', '✏ 글자·모양 고치기');
+  eb.onclick = () => mgDialog(Object.assign({}, x.mg, { __edit: true, __len: Math.round((isClip ? x.out - x.in : x.end - x.start) * 10) / 10 }), async (s, len) => {
+    const r = await mgMake(s, len, { asClip: isClip }); if (!r) return; push(); x.mg = s; x.mediaId = r.m.id;
+    if (isClip) { x.in = 0; x.out = Math.round(r.m.duration * 100) / 100; } else { x.in = 0; x.end = Math.round((x.start + r.m.duration) * 100) / 100; }
+    changed(true); toast('모션그래픽을 다시 만들었어요'); });
+  br.append(eb); p.append(br);
+}
+function swapMedia(x) {   // 겹친 영상을 다른 영상·사진으로 바꾸기 (자리·시간은 그대로)
+  const list = Object.values(S.media).filter((m) => m.hasVideo && !m.hide && m.id !== x.mediaId);
+  if (!list.length) return toast('바꿀 영상이나 사진이 없어요. 미디어 탭에서 먼저 가져와 주세요');
+  const d = E('div', 'dlg', '<h2>🔁 다른 것으로 바꾸기</h2>'); const g = E('div', 'mg-swap'); d.append(g);
+  list.forEach((m) => { const b = E('button', 'mg-sw', `<span style="${m.thumb ? `background-image:url(/api/thumb/${m.id})` : ''}"></span><small>${esc(m.name)}</small>`); b.title = m.name;
+    b.onclick = () => { push(); const len = x.end - x.start; x.mediaId = m.id; x.in = 0; if (!m.isImage && !m.mg) x.end = Math.round((x.start + Math.min(len, m.duration)) * 100) / 100; if (m.mg) x.end = Math.round((x.start + m.duration) * 100) / 100;
+      const asp = m.width && m.height ? m.height / m.width : x.h / Math.max(0.1, x.w); x.h = Math.round(x.w * asp * 10) / 10; delete x.mg; closeModal(); changed(true); toast('바꿨어요'); };
+    g.append(b); });
+  const acts = E('div', 'acts'); const no = E('button', '', '닫기'); no.onclick = closeModal; acts.append(no); d.append(acts); openModal(d);
+}
 addVer(document.querySelector('.brand'));
 })();

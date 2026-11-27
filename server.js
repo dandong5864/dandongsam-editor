@@ -182,7 +182,7 @@ function peaks(file) {
 // ---- 업로드 / 분석 ----
 const IMG_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
 const alphaPathOf = (id) => path.join(DIRS.media, id + '.alpha.webm');
-const hasAlpha = (m) => m && m.isImage && fs.existsSync(alphaPathOf(m.id));
+const hasAlpha = (m) => m && (m.isImage || m.mg) && fs.existsSync(alphaPathOf(m.id));   // 투명 사진, 투명 모션그래픽
 async function ingest(id, name, file, ext) {
   let isImage = false;
   if (IMG_EXT.includes(ext)) {   // 사진은 30초짜리 정지 영상으로 바꿔 두면 영상처럼 편집·겹치기·내보내기가 다 돼요
@@ -340,7 +340,7 @@ function listFonts() {
 }
 const pubFonts = () => listFonts().map(({ path: _p, ...r }) => r);
 
-const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, lite: !!m.lite, liteWait: !m.lite && !m.preview && isHeavy(m), isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), color: m.color || null, hide: !!m.hide });
+const pub = (m) => ({ id: m.id, name: m.name, duration: m.duration, width: m.width, height: m.height, fps: m.fps, hasVideo: m.hasVideo, hasAudio: m.hasAudio, size: m.size, thumb: !!m.thumb, lite: !!m.lite, liteWait: !m.lite && !m.preview && isHeavy(m), isImage: !!m.isImage, hasAlpha: !!hasAlpha(m), mg: !!m.mg, color: m.color || null, hide: !!m.hide });
 
 // ---- 파일 스트리밍(Range 지원) ----
 function serveFile(req, res, file, type) {
@@ -827,7 +827,7 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
   - 제목은 "kind": "text", size 90 정도. 줄바꿈은 \\n. 줄마다 색을 달리하려면 "colors": ["#ffffff", "#FFFD00"]
   - 자막은 한 줄에 너무 길지 않게, 문장 중간에서 끊기지 않게 나눠 주세요. (세로 쇼츠는 한 줄 14자 안팎, 가로 16:9 는 26자 안팎)
   - 자막 크기·위치는 편집설정.json 의 subtitle 값 그대로 쓰세요. 가로(16:9)라고 줄이거나 옮기지 마세요 (사용자가 롱폼·강의·숏폼별로 직접 저장한 값이에요).
-  - 쓸 수 있는 글꼴: Cafe24 Ssurround, Cafe24 Dangdanghae, Cafe24 Danjunghae, Cafe24 Dongdong, Cafe24 Ohsquare, Cafe24 Syongsyong, Cafe24 Supermagic OTF Bold, Kyobo Handwriting 2019, Ownglyph PDH Regular, omyu pretty, AndongKaturi, Ownglyph yuntaeng Regular, insungit Cutelively jisu, KCC-Chassam, Single Day, NanumMyeongjo, NanumMyeongjo Bold, NanumMyeongjo ExtraBold
+  - 쓸 수 있는 글꼴: Cafe24 Ssurround, Cafe24 Dangdanghae, Cafe24 Danjunghae, Cafe24 Dongdong, Cafe24 Ohsquare, Cafe24 Syongsyong, Cafe24 Supermagic OTF Bold, Kyobo Handwriting 2019, Ownglyph PDH Regular, omyu pretty, AndongKaturi, Ownglyph yuntaeng Regular, insungit Cutelively jisu, KCC-Chassam, Single Day, NanumMyeongjo, NanumMyeongjo Bold, NanumMyeongjo ExtraBold, Black Han Sans, Do Hyeon
 
 [편집설정.json]  (이 폴더에 있으면 꼭 읽고 그대로 따르세요)
 - canvas : 영상 모양. .dsp 의 data.canvas 에 그대로 쓰세요 ("9:16" 세로 쇼츠 / "16:9" 가로 유튜브).
@@ -847,6 +847,27 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
 - 도형: kind "shape", shape 는 "arrow"(화살표) "check"(✔) "cross"(✖) "checkbox"(☑) "pointer"(마우스 포인터) "click"(클릭 표시 원) "rect" "ellipse". x,y(중심 %), w,h(% 너비 기준), rot, fill:true, fillColor, stroke, strokeColor, strokeW, opacity, start, end, text:"".
 - 포인터 이동: pointer 도형에 mv:true, x2,y2(도착 %), mvDur(이동 초). 도착 순간에 같은 자리에 "click" 도형을 0.4초쯤 추가하면 클릭처럼 보여요.
 
+- motion : 모션그래픽. null 이면 넣지 마세요(일반 자동 편집). 값이 있으면 폴더 안 "모션그래픽스킬/SKILL.md"를 읽고 따르세요.
+  {"mode": "mix"(촬영 영상 + 필요한 곳만 모션그래픽) | "only"(모션그래픽만으로 영상 전체) | "multi"(실사·AI 영상·사진·모션그래픽 섞기: 폴더에 있는 파일만),
+   "style": "auto"(내용 보고 고르기) 또는 아래 스타일 이름, "amount": "low"(1분에 1~2개) | "mid"(2~3개) | "high"(4~5개)}
+
+[모션그래픽] (편집설정.json 의 motion 이 있을 때, 또는 사용자가 모션그래픽을 넣어 달라고 할 때)
+모션그래픽은 영상 파일을 직접 만들지 말고 "설계도"(mg)만 적으세요. 편집기가 열 때 그 설계도로 영상을 그려 "추가 미디어" 줄에 올리고, 결과/모션그래픽/ 폴더에도 저장해요.
+- 촬영 영상 위에 덮기(내레이션은 계속 이어짐): texts 에 {"id":"g1","kind":"mg","start":12.0,"end":16.5,"mg":{ ...설계도... }}
+- 모션그래픽만으로 된 장면(영상 줄에 차례로): clips 에 {"id":"c5","mg":{ ...설계도... },"dur":4.5}  (mediaId·in·out 은 쓰지 않아요. 소리는 audio 의 내레이션으로)
+- 설계도 모양 (type 하나를 고르세요. 화면 글자는 짧게, 강조할 말은 [ ] 로 감싸요):
+  {"type":"steps","title":"김치찌개 끓이는 순서","items":["고기 먼저 [달달] 볶기","김치 넣고 5분","물 붓고 20분"]}      순서 (2~5개)
+  {"type":"number","title":"한 달 전기요금","value":"37%","label":"평균 [절약]"}                                      숫자 하나 (0부터 세어 올라감)
+  {"type":"compare","title":"일반 vs 실리콘 수세미","left":{"label":"일반","value":"2주","text":"세균 번식"},"right":{"label":"실리콘","value":"6개월","text":"[오래] 써요"},"win":"right"}   비교
+  {"type":"flow","title":"챗GPT가 답을 만드는 법","items":["질문을 조각으로","다음 말 예측","한 글자씩 이어 쓰기"]}   작동 원리 (2~5개)
+  {"type":"quote","label":"핵심","text":"물은 목마르기 전에 [하루 2리터]"}                                              핵심 문장
+  {"type":"list","title":"여행 전 챙길 것","items":["여권","상비약","충전기"]}                                          체크리스트 (2~6개)
+  공통 선택 값: "style" (아래 6개 중 하나), "at":[0.6,1.8,3.0] (항목이 나오는 시각, 그 모션그래픽 시작부터 초 — 말하는 순간에 맞추면 좋아요), "clear":true (바탕 없이 영상 위에 투명하게)
+- style: "howto"(단계별 따라하기·밝음) "lineicon"(라인 아이콘·검정+연두) "newsshorts"(뉴스 카드·검정+노랑) "pptpen"(인강 PPT 첨삭·흰 슬라이드+빨간 펜) "cardnews"(카드뉴스·연보라 파스텔) "broadcast"(방송 뉴스 그래픽·남색)
+  편집설정.json 의 motion.style 이 "auto" 가 아니면 모든 모션그래픽에 그 스타일을 쓰세요. "auto" 면 영상 전체에서 1~2개만 골라 통일하세요.
+- 직접 그린 HTML (Codex·Claude Code 처럼 파일을 만들 수 있을 때만): "결과/모션그래픽/장면1.html" 에 <canvas id="c"> 와 window.draw(t)(t=초, 같은 t 면 같은 그림), window.DUR 을 두고 {"mg":{"html":"모션그래픽/장면1.html"}} 로 적어요. 화면 크기는 window.W, window.H 로 알 수 있어요. 인터넷(글꼴·그림·주소)은 막혀 있으니 쓰지 말고, 글꼴은 "Black Han Sans"(제목) "Do Hyeon"(본문)을 쓰세요.
+- 규칙: 같은 모양을 연달아 쓰지 말고, 같은 내용을 두 번 보여 주지 마세요. 한 모션그래픽은 3~8초. 자막·제목과 겹쳐도 되지만(화면 아래 22%는 비워 둬요) 화면을 따라 해야 하는 장면(클릭·결과 화면)은 덮지 마세요. 지어낸 숫자·통계는 쓰지 말고 예시 숫자면 [예시]라고 적으세요.
+
 [받아적기 폴더] (있으면 꼭 쓰세요)
 - 편집기의 "🎤 받아 적기"로 만든 파일이에요: 받아적기/<영상 파일 이름>.words.json (예: 받아적기/영상1.mp4.words.json)
 - 모양: { "file": "영상1.mp4", "duration": 62.4, "segments": [ { "start": 0.5, "end": 3.1, "text": "안녕하세요 오늘은", "words": [ { "w": " 안녕하세요", "s": 0.5, "e": 1.2 }, ... ] } ] }
@@ -862,7 +883,8 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
 - in < out, start < end. 모든 mediaId 는 media 에 있어야 합니다.
 - "결과" 폴더에 만든 .dsp 파일 이름은 한글이어도 됩니다 (예: 내영상_편집.dsp).
 `;
-const SKILL_SRC = path.join(ROOT, '스킬', 'dandongsam-shorts-codex');   // 편집기에 들어 있는 AI용 스킬(작업 폴더에 복사해 줘요)
+const SKILL_SRC = path.join(ROOT, '스킬', 'dandongsam-shorts-codex');
+const MOTION_SRC = path.join(ROOT, '스킬', 'dandongsam-motion');   // 모션그래픽 스킬 (따로 실행 가능, 작업 폴더의 모션그래픽스킬/ 로 복사)   // 편집기에 들어 있는 AI용 스킬(작업 폴더에 복사해 줘요)
 // 폴더 복사는 한 파일씩 직접 해요 (윈도우에서 한글 경로를 한꺼번에 복사하면 편집기가 통째로 꺼지는 경우가 있어요)
 function copyDir(src, dst) {
   fs.mkdirSync(dst, { recursive: true });
@@ -880,7 +902,7 @@ function putTools(sd) {
   if (!Object.keys(t).length) return; const f = path.join(sd, '도구위치.json'), txt = JSON.stringify(t, null, 1);
   try { if (fs.readFileSync(f, 'utf8') === txt) return; } catch (e) {} try { fs.writeFileSync(f, txt, 'utf8'); } catch (e) {}
 }
-function putSkill(dir) { if (skillDone.has(dir) && fs.existsSync(path.join(dir, '단동샘스킬', 'SKILL.md'))) return; try { if (fs.existsSync(SKILL_SRC)) { const sd = path.join(dir, '단동샘스킬'); copyDir(SKILL_SRC, sd); putTools(sd); skillDone.add(dir); } } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
+function putSkill(dir) { if (skillDone.has(dir) && fs.existsSync(path.join(dir, '단동샘스킬', 'SKILL.md')) && fs.existsSync(path.join(dir, '모션그래픽스킬', 'SKILL.md'))) return; try { if (fs.existsSync(SKILL_SRC)) { const sd = path.join(dir, '단동샘스킬'); copyDir(SKILL_SRC, sd); putTools(sd); } if (fs.existsSync(MOTION_SRC)) { const md = path.join(dir, '모션그래픽스킬'); copyDir(MOTION_SRC, md); putTools(md); } skillDone.add(dir); } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
   fs.writeFileSync(path.join(dir, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8');
@@ -1380,6 +1402,84 @@ if (process.env.AUTO_QUIT) {
   }, 3000).unref();
 }
 
+// ---- 모션그래픽: 편집기 화면이 그린 그림(프레임)을 받아 영상 파일로 만들어요 ----
+// 화면 → /api/mg/start → /api/mg/frame (JPEG·PNG 를 이어 붙여 여러 장씩) → /api/mg/finish
+// 같은 설계도로 만든 영상은 다시 만들지 않고 그대로 써요 (mgHash). 작업 폴더가 있으면 결과/모션그래픽/ 에도 저장해요.
+const mgRuns = {};
+const MG_HASH = /^[0-9a-z]{6,40}$/;
+const mgJobDir = (job) => { if (!job || typeof job !== 'string') return null; try { const d = path.resolve(job); if (autoAllowed(d) && fs.statSync(d).isDirectory()) return d; } catch (e) {} return null; };
+const mgSaveDir = (jd) => path.join(jd, '결과', '모션그래픽');
+const mgClean = (nm) => String(nm || '모션그래픽').replace(/[\\/:*?"<>|\r\n]/g, '').trim().slice(0, 60) || '모션그래픽';
+async function mgIngest(file, alphaFile, name, hash) {
+  const id = crypto.randomBytes(6).toString('hex'), dest = path.join(DIRS.media, id + '.mp4');
+  fs.copyFileSync(file, dest);
+  if (alphaFile && fs.existsSync(alphaFile)) fs.copyFileSync(alphaFile, alphaPathOf(id));
+  const m = await ingest(id, name, dest, '.mp4'); m.mg = true; m.mgHash = hash; media[id] = m; saveDB(); return m;
+}
+async function handleMg(req, res, p, u) {
+  if (req.method === 'GET' && p === '/api/mg/html') {   // AI가 작업 폴더에 만든 모션그래픽 HTML 읽기 (작업 폴더 안의 .html 만)
+    const jd = mgJobDir(u.searchParams.get('job')); const rel = String(u.searchParams.get('f') || '');
+    if (!jd) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
+    const cands = [path.resolve(jd, '결과', rel), path.resolve(jd, rel)];
+    const f = cands.find((x) => inside(x, jd) && /\.html?$/i.test(x) && fs.existsSync(x) && fs.statSync(x).isFile());
+    if (!f) return json(res, 404, { error: '모션그래픽 파일을 찾을 수 없어요: ' + rel });
+    if (fs.statSync(f).size > 3e6) return json(res, 400, { error: '모션그래픽 파일이 너무 커요' });
+    return json(res, 200, { html: fs.readFileSync(f, 'utf8').replace(/^﻿/, '') });
+  }
+  if (req.method !== 'POST') { res.writeHead(404); return res.end(); }
+  if (p === '/api/mg/frame') {
+    const r = mgRuns[u.searchParams.get('id')]; if (!r) { req.resume(); return json(res, 400, { error: '영상 만들기가 끝났거나 없어요' }); }
+    r.at = Date.now();
+    try {
+      for await (const c of req) { if (r.dead) break; if (!r.proc.stdin.write(c)) await new Promise((ok) => { r.proc.stdin.once('drain', ok); r.proc.once('close', ok); }); }
+    } catch (e) {}
+    return json(res, r.dead ? 500 : 200, r.dead ? { error: '영상 만들기에 실패했어요' + (r.err ? ': ' + r.err.slice(-300) : '') } : { ok: true });
+  }
+  const b = await readBody(req).catch(() => ({}));
+  if (p === '/api/mg/find') {   // 이미 만든 같은 모션그래픽이 있으면 그대로 써요
+    const h = String(b.hash || ''); if (!MG_HASH.test(h)) return json(res, 200, {});
+    const hit = Object.values(media).find((m) => m.mg && m.mgHash === h && fs.existsSync(m.file));
+    if (hit) return json(res, 200, { media: pub(hit) });
+    const jd = mgJobDir(b.job); if (!jd) return json(res, 200, {});
+    const f = path.join(mgSaveDir(jd), 'mg_' + h + '.mp4');
+    if (!fs.existsSync(f)) return json(res, 200, {});
+    try { const m = await mgIngest(f, path.join(mgSaveDir(jd), 'mg_' + h + '.webm'), mgClean(b.name) + '.mp4', h); return json(res, 200, { media: pub(m) }); } catch (e) { return json(res, 200, {}); }
+  }
+  if (p === '/api/mg/start') {
+    const W = Math.round(+b.w || 0), H = Math.round(+b.h || 0), fps = Math.round(clamp(+b.fps || 30, 10, 60)), h = String(b.hash || '');
+    if (!(W >= 64 && H >= 64 && W <= 3840 && H <= 3840) || W % 2 || H % 2 || !MG_HASH.test(h)) return json(res, 400, { error: '모션그래픽 크기가 맞지 않아요' });
+    Object.keys(mgRuns).forEach((k) => { if (Date.now() - mgRuns[k].at > 600000) { try { mgRuns[k].proc.kill(); } catch (e) {} delete mgRuns[k]; } });
+    if (Object.keys(mgRuns).length >= 3) return json(res, 429, { error: '모션그래픽을 이미 만들고 있어요. 잠시 뒤에 다시 해 주세요' });
+    const id = crypto.randomBytes(6).toString('hex'), out = path.join(DIRS.cache, 'mg_' + id + '.mp4'), aout = b.alpha ? path.join(DIRS.cache, 'mg_' + id + '.webm') : null;
+    const inp = ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', b.alpha ? 'png' : 'mjpeg', '-i', '-'];
+    const mp4 = ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'veryfast', '-r', String(fps), '-movflags', '+faststart', out];
+    const args = aout ? [...inp, '-filter_complex', `[0:v]scale=${W}:${H},format=rgba,split=2[va][vb];[va]format=yuva420p[vx];[vb]format=yuv420p[vm]`, '-map', '[vx]', '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '32', '-deadline', 'realtime', '-cpu-used', '8', '-auto-alt-ref', '0', '-r', String(fps), aout, '-map', '[vm]', ...mp4]
+      : [...inp, '-vf', `scale=${W}:${H},format=yuv420p`, ...mp4];
+    const proc = spawn(FFMPEG, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    const r = mgRuns[id] = { proc, out, aout, hash: h, name: mgClean(b.name) + '.mp4', job: b.job, at: Date.now(), err: '', dead: false };
+    proc.stderr.on('data', (c) => { r.err = (r.err + c).slice(-2000); });
+    proc.stdin.on('error', () => {});
+    r.done = new Promise((ok) => proc.on('close', (code) => { r.code = code; if (code) r.dead = true; ok(); }));
+    proc.on('error', (e) => { r.dead = true; r.err += e.message; });
+    return json(res, 200, { id });
+  }
+  if (p === '/api/mg/finish' || p === '/api/mg/cancel') {
+    const r = mgRuns[b.id]; if (!r) return json(res, 400, { error: '영상 만들기가 끝났거나 없어요' });
+    delete mgRuns[b.id];
+    if (p === '/api/mg/cancel') { try { r.proc.kill(); } catch (e) {} [r.out, r.aout].forEach((f) => { if (f) try { fs.unlinkSync(f); } catch (e) {} }); return json(res, 200, { ok: true }); }
+    try { r.proc.stdin.end(); } catch (e) {}
+    await r.done;
+    const fail = (msg) => { [r.out, r.aout].forEach((f) => { if (f) try { fs.unlinkSync(f); } catch (e) {} }); return json(res, 500, { error: msg }); };
+    if (r.code || !fs.existsSync(r.out)) return fail('모션그래픽 영상을 만들지 못했어요' + (r.err ? ': ' + r.err.slice(-300) : ''));
+    let m; try { m = await mgIngest(r.out, r.aout, r.name, r.hash); } catch (e) { return fail('모션그래픽 영상을 불러오지 못했어요: ' + e.message); }
+    let saved = null; const jd = mgJobDir(r.job);
+    if (jd) { try { const sd = mgSaveDir(jd); fs.mkdirSync(sd, { recursive: true }); saved = path.join(sd, 'mg_' + r.hash + '.mp4'); fs.copyFileSync(r.out, saved); if (r.aout) fs.copyFileSync(r.aout, path.join(sd, 'mg_' + r.hash + '.webm')); } catch (e) { saved = null; } }
+    [r.out, r.aout].forEach((f) => { if (f) try { fs.unlinkSync(f); } catch (e) {} });
+    return json(res, 200, { media: pub(m), saved });
+  }
+  res.writeHead(404); res.end();
+}
+
 // ---- 라우터 ----
 // ---- 지킴이: 편집기 화면에서 온 요청만 받아요 (다른 웹사이트가 몰래 보내는 요청은 막아요) ----
 const OK_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
@@ -1420,7 +1520,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE' && (m = /^\/api\/media\/(\w+)$/.exec(p))) {
       const it = media[m[1]];
       if (it) {
-        [it.file, it.thumb, it.preview, it.lite, path.join(DIRS.cache, it.id + '.peaks.json')].forEach((f) => { try { f && fs.unlinkSync(f); } catch (e) {} });
+        [it.file, it.thumb, it.preview, it.lite, path.join(DIRS.cache, it.id + '.peaks.json'), alphaPathOf(it.id)].forEach((f) => { try { f && fs.unlinkSync(f); } catch (e) {} });
         delete media[m[1]]; saveDB();
       }
       return json(res, 200, { ok: true });
@@ -1482,7 +1582,9 @@ const server = http.createServer(async (req, res) => {
       putSkill(dir); const sd = path.join(dir, '단동샘스킬'), files = [];
       const walk = (d, rel, depth) => { let l = []; try { l = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; } l.forEach((e) => { if (e.name === '__pycache__' || e.name.endsWith('.pyc')) return; const r = rel ? rel + '/' + e.name : e.name; if (e.isDirectory()) { if (depth < 3) walk(path.join(d, e.name), r, depth + 1); } else files.push(r); }); };
       walk(sd, '', 0); let text = ''; try { text = fs.readFileSync(path.join(sd, 'SKILL.md'), 'utf8'); } catch (e) {}
-      return json(res, 200, { dir: sd, exists: !!text, files: files.sort(), text });
+      const md = path.join(dir, '모션그래픽스킬'), mfiles = [], f0 = files.sort().slice(); files.length = 0; walk(md, '', 0); mfiles.push(...files.sort());
+      let mtext = ''; try { mtext = fs.readFileSync(path.join(md, 'SKILL.md'), 'utf8'); } catch (e) {}
+      return json(res, 200, { dir: sd, exists: !!text, files: f0, text, motion: mtext ? { dir: md, files: mfiles, text: mtext } : null });
     }
     if (req.method === 'GET' && p === '/api/auto/stt') {   // 받아 적기 상태 (작업 폴더 기준)
       const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
@@ -1519,6 +1621,7 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res, 400, { error: '잘못된 요청' });
     }
+    if (p.startsWith('/api/mg/')) return handleMg(req, res, p, u);
     if (req.method === 'POST' && p === '/api/auto/open') {
       const b = await readBody(req); const f = path.resolve(String(b.file || ''));
       if (!autoAllowed(f) || !/\.dsp$/i.test(f) || !fs.existsSync(f)) return json(res, 400, { error: '편집 파일을 찾을 수 없어요' });
@@ -1544,7 +1647,7 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {}
       if (linked.length) { const mp = new Map(linked.map((x) => [x.from.normalize('NFC'), x.to])); const fix = (m) => { if (typeof m === 'string') return mp.get(m.normalize('NFC')) || m; if (m && typeof m === 'object') { const k = m.name || m.file; if (k && mp.has(String(k).normalize('NFC'))) { m.name = mp.get(String(k).normalize('NFC')); if (m.file) m.file = m.name; } } return m; };
         if (Array.isArray(data.media)) data.media = data.media.map(fix); else if (data.media) Object.keys(data.media).forEach((k) => { data.media[k] = fix(data.media[k]); }); }
-      return json(res, 200, { data, name: j.name || path.basename(f, '.dsp'), media: added, missing, linked });
+      return json(res, 200, { data, name: j.name || path.basename(f, '.dsp'), media: added, missing, linked, job: jobDir });
     }
     if (req.method === 'GET' && p === '/api/feed/youtube') {
       const ch = String(new URL(req.url, 'http://x').searchParams.get('channel') || '');
