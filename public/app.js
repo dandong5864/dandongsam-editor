@@ -486,7 +486,10 @@ function updateStage() {
   const tp = tplOn(), th = tp ? sh * (tp.top || 0) / 100 : 0, bh = tp ? sh * (tp.bottom || 0) / 100 : 0, vb = $('#vbox'), tb = $('#tplbg');
   tb.style.display = tp ? 'block' : 'none';
   const tf = $('#tplfg'); tf.style.display = tp ? 'block' : 'none';
-  if (tp) { tb.innerHTML = `<i style="inset:0;background:${tp.midColor}"></i>`; tf.innerHTML = `<i style="top:0;height:${th}px;background:${tp.topColor}"></i><i style="bottom:0;height:${bh}px;background:${tp.botColor}"></i>`; }
+  if (tp) {   // 색 값은 글자 그대로 넣지 않고 스타일로만 넣어요 (받은 .dsp 안의 이상한 값이 화면에서 실행되지 않게)
+    const bar = (css, c) => { const i = document.createElement('i'); i.style.cssText = css; i.style.background = /^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? c : '#000000'; return i; };
+    tb.replaceChildren(bar('inset:0', tp.midColor)); tf.replaceChildren(bar(`top:0;height:${+th || 0}px`, tp.topColor), bar(`bottom:0;height:${+bh || 0}px`, tp.botColor));
+  }
   const fm = !!(tp && tp.fitMid); vb.style.top = (fm ? th : 0) + 'px'; vb.style.height = (fm ? sh - th - bh : sh) + 'px';
   const boxH = fm ? sh - th - bh : sh, fullH = sh;
   const c = cur; if (!c || !video.videoWidth) { vGeo = null; renderOv(true); return; }

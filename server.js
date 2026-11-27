@@ -963,6 +963,7 @@ function pickFile(initDir) {   // 내 컴퓨터 파일 선택 창 (시작 위치
   });
 }
 function openFolder(dir) {
+  try { if (!fs.statSync(dir).isDirectory()) return; } catch (e) { return; }   // 폴더만 열어요 (파일이면 실행돼 버려요)
   if (process.platform === 'win32') spawn('explorer', [dir], { detached: true, stdio: 'ignore' }).unref();
   else if (process.platform === 'darwin') spawn('open', [dir], { detached: true, stdio: 'ignore' }).unref();
   else spawn('xdg-open', [dir], { detached: true, stdio: 'ignore' }).unref();
@@ -1440,12 +1441,14 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req); const dir = path.resolve(String(b.path || '').replace(/^"|"$/g, ''));
       let ok = false; try { ok = fs.statSync(dir).isDirectory(); } catch (e) {}
       if (!ok) return json(res, 400, { error: '그 폴더를 찾을 수 없어요' });
+      if (dir === path.parse(dir).root || dir === path.resolve(os.homedir())) return json(res, 400, { error: '드라이브 전체나 사용자 폴더 전체는 고를 수 없어요. 그 안의 폴더를 골라 주세요' });
       const c = autoCfg(); if (!inside(dir, c.root) && !c.extra.includes(dir)) { c.extra.push(dir); autoSave(c); }
       try { prepareJob(dir); } catch (e) { return json(res, 500, { error: '폴더에 쓸 수 없어요: ' + e.message }); }
       return json(res, 200, { path: dir });
     }
     if (req.method === 'POST' && p === '/api/auto/root') {
       const b = await readBody(req); const dir = path.resolve(String(b.path || '').replace(/^"|"$/g, ''));
+      if (!String(b.path || '').trim() || dir === path.parse(dir).root || dir === path.resolve(os.homedir())) return json(res, 400, { error: '드라이브 전체나 사용자 폴더 전체는 고를 수 없어요. 그 안의 폴더를 골라 주세요' });   // 그 아래 모든 폴더가 작업으로 잡혀 지워질 수 있어서 막아요
       try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { return json(res, 400, { error: '그 위치에 폴더를 만들 수 없어요' }); }
       const c = autoCfg(); c.root = dir; autoSave(c); return json(res, 200, { ok: true });
     }
@@ -1493,8 +1496,9 @@ const server = http.createServer(async (req, res) => {
       autoSttRun(dir, !!b.force); return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/auto/openfolder') {
-      const b = await readBody(req); if (!autoAllowed(String(b.path || ''))) return json(res, 400, { error: '열 수 없는 폴더예요' });
-      openFolder(path.resolve(b.path)); return json(res, 200, { ok: true });
+      const b = await readBody(req); const d = path.resolve(String(b.path || '')); let isDir = false; try { isDir = fs.statSync(d).isDirectory(); } catch (e) {}
+      if (!autoAllowed(d) || !isDir) return json(res, 400, { error: '열 수 없는 폴더예요' });   // 파일을 주면 열기가 아니라 실행돼 버려서 폴더만 열어요
+      openFolder(d); return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/auto/terminal') {
       const b = await readBody(req); const d = path.resolve(String(b.path || ''));
