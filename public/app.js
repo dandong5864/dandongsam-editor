@@ -736,7 +736,7 @@ function fitRows() {
   const sc = $('#tl-scroll'), tl = $('#timeline'); if (!sc || !tl) return;
   const lanes = (id) => +(($(id) || {}).dataset || {}).lanes || 1;
   const natural = 26 + 84 + 50 + (lanes('#track-t') + lanes('#track-k') + lanes('#track-s') + lanes('#track-p')) * 40 + 6;
-  const rs = Math.max(1, Math.min(2.6, sc.clientHeight / natural));
+  const rs = Math.max(0.62, Math.min(2.6, sc.clientHeight / natural));
   const cur = parseFloat(tl.style.getPropertyValue('--rs')) || 1; if (Math.abs(cur - rs) > 0.005) tl.style.setProperty('--rs', rs.toFixed(3));
 }
 (() => { const sc = $('#tl-scroll'); if (sc && window.ResizeObserver) new ResizeObserver(() => fitRows()).observe(sc); addEventListener('resize', () => fitRows()); })();
@@ -2089,19 +2089,22 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
 {
   const body = document.body, LK = 'vtk.layout.v1', DEF = { lw: 380, rw: 350, th: 340 };
   let L = Object.assign({}, DEF); try { Object.assign(L, JSON.parse(localStorage.getItem(LK) || '{}')); } catch (e) {}
-  const lim = () => ({ lw: [240, Math.max(300, innerWidth - 700)], rw: [240, Math.max(300, innerWidth - 700)], th: [170, Math.max(220, innerHeight - 300)] });
-  const apply = () => { const m = lim(); ['lw', 'rw', 'th'].forEach((k) => { L[k] = clamp(+L[k] || DEF[k], m[k][0], m[k][1]); body.style.setProperty('--' + k, L[k] + 'px'); }); };
+  /* 화면 크기에 맞춰 전체 크기를 자동으로 맞춰요 (기준: 가로 1920 · 세로 940 → 그보다 작은 화면은 비율대로 줄임) */
+  let ui = 1;
+  const calcUi = () => { ui = Math.max(0.55, Math.min(1, innerWidth / 1920, innerHeight / 940)); document.documentElement.style.setProperty('--ui', ui.toFixed(3)); };
+  const lim = () => ({ lw: [240, Math.max(300, innerWidth / ui - 700)], rw: [240, Math.max(300, innerWidth / ui - 700)], th: [170, Math.max(220, innerHeight / ui - 300)] });
+  const apply = () => { calcUi(); const m = lim(); ['lw', 'rw', 'th'].forEach((k) => { L[k] = clamp(+L[k] || DEF[k], m[k][0], m[k][1]); body.style.setProperty('--' + k, (L[k] * ui).toFixed(1) + 'px'); }); };
   const refresh = () => { updateStage(); renderTL(); };
   const wire = (id, key, axis, sign) => {
     const g = $(id); let st = null;
     g.addEventListener('pointerdown', (e) => { st = { p: axis === 'x' ? e.clientX : e.clientY, v: L[key] }; g.setPointerCapture(e.pointerId); g.classList.add('drag'); body.classList.add('resizing'); body.style.cursor = axis === 'x' ? 'col-resize' : 'row-resize'; e.preventDefault(); });
-    g.addEventListener('pointermove', (e) => { if (!st) return; L[key] = st.v + sign * ((axis === 'x' ? e.clientX : e.clientY) - st.p); apply(); refresh(); });
+    g.addEventListener('pointermove', (e) => { if (!st) return; L[key] = st.v + sign * ((axis === 'x' ? e.clientX : e.clientY) - st.p) / ui; apply(); refresh(); });
     const end = () => { if (!st) return; st = null; g.classList.remove('drag'); body.classList.remove('resizing'); body.style.cursor = ''; try { localStorage.setItem(LK, JSON.stringify(L)); } catch (e) {} refresh(); };
     g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end);
     g.addEventListener('dblclick', () => { L[key] = DEF[key]; apply(); try { localStorage.setItem(LK, JSON.stringify(L)); } catch (e) {} refresh(); });
   };
   wire('#g-left', 'lw', 'x', 1); wire('#g-right', 'rw', 'x', -1); wire('#g-tl', 'th', 'y', -1);
-  apply(); window.addEventListener('resize', apply);
+  apply(); window.addEventListener('resize', () => { apply(); refresh(); });
 }
 
 

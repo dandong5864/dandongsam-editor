@@ -1,4 +1,5 @@
 :root{
+  --ui:1;
   --bg:#141416;--panel:#1c1c20;--panel2:#232328;--line:#2f2f36;--text:#e9e9ee;--dim:#8e8e99;
   --accent:#27d3c3;--accent2:#1aa597;--danger:#ff5d6c;--clip:#2b5b6b;--clip-sel:#27d3c3;--aclip:#4a3b7a;
 }
@@ -23,7 +24,7 @@ select,input[type=text]{background:var(--panel2);color:var(--text);border:1px so
 .spacer{flex:1}
 .sep{width:1px;height:20px;background:var(--line);margin:0 6px}
 
-body{--lw:380px;--rw:350px;--th:340px;display:grid;grid-template-rows:54px 1fr 7px var(--th);height:100vh}
+body{--lw:380px;--rw:350px;--th:340px;display:grid;grid-template-rows:calc(54px*var(--ui)) 1fr 7px var(--th);height:100vh}
 #top{display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel)}
 .brand{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
 .logo{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;background:var(--accent);color:#06201d;font-size:11px}
@@ -45,7 +46,7 @@ body{--lw:380px;--rw:350px;--th:340px;display:grid;grid-template-rows:54px 1fr 7
 .mitem .btns button{padding:1px 7px;font-size:12px}
 .empty-media{margin:auto;text-align:center;color:var(--dim);padding:20px;line-height:1.8}
 
-#player{display:grid;grid-template-rows:1fr 46px;min-width:0;min-height:0;background:#0d0d0f}
+#player{display:grid;grid-template-rows:1fr calc(46px*var(--ui));min-width:0;min-height:0;background:#0d0d0f}
 #stage-wrap{display:grid;place-items:center;min-height:0;padding:12px;overflow:hidden;background:#2a2d36}
 #stage{position:relative;background:#000;overflow:hidden;box-shadow:0 0 0 1px #5b6070,0 6px 24px rgba(0,0,0,.45)}
 #vbox video{position:absolute;max-width:none;display:none;transform-origin:center center}
@@ -73,7 +74,7 @@ body{--lw:380px;--rw:350px;--th:340px;display:grid;grid-template-rows:54px 1fr 7
 .sel-title small{display:block;color:var(--dim);font-weight:400;margin-top:2px}
 .ratio-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 14px}
 
-#timeline{border-top:1px solid var(--line);background:var(--panel);display:grid;grid-template-rows:40px 1fr;min-height:0}
+#timeline{border-top:1px solid var(--line);background:var(--panel);display:grid;grid-template-rows:calc(40px*var(--ui)) 1fr;min-height:0}
 #tl-bar{display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line)}
 #t-zoom{width:110px;accent-color:var(--accent)}
 #tl-wrap{display:grid;grid-template-columns:184px 1fr;min-height:0}
@@ -107,10 +108,10 @@ body{--lw:380px;--rw:350px;--th:340px;display:grid;grid-template-rows:54px 1fr 7
 .split-mode #tl-scroll{cursor:crosshair}
 .split-mode .clip,.split-mode .aclip{cursor:crosshair}
 
-#toast{position:fixed;left:50%;bottom:310px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;z-index:50;pointer-events:none}
+#toast{position:fixed;left:50%;bottom:calc(310px*var(--ui));transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;z-index:50;pointer-events:none}
 .toast{background:#000e;border:1px solid var(--line);padding:8px 14px;border-radius:8px;display:flex;gap:10px;align-items:center;pointer-events:auto;box-shadow:0 4px 18px #0008;max-width:80vw}
 .toast button{padding:2px 9px;font-size:12px}
-#uploads{position:fixed;left:12px;bottom:300px;z-index:40;display:flex;flex-direction:column;gap:6px}
+#uploads{position:fixed;left:12px;bottom:calc(300px*var(--ui));z-index:40;display:flex;flex-direction:column;gap:6px}
 .up{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-width:240px;font-size:12px}
 .up .bar{height:4px;background:#000;border-radius:2px;margin-top:6px;overflow:hidden}
 .up .bar i{display:block;height:100%;background:var(--accent);width:0}
@@ -186,9 +187,10 @@ kbd{background:var(--panel2);border:1px solid #3a3a44;border-bottom-width:2px;bo
 .titem .tm{font-size:11px;color:var(--dim)}.titem .tx{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mhead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
 
-#media,#props{zoom:1.22}
-#top{zoom:1.18}
-#tl-bar{zoom:1.18}
+#media,#props{zoom:calc(1.22*var(--ui))}
+#top{zoom:calc(1.18*var(--ui))}
+#tl-bar{zoom:calc(1.18*var(--ui))}
+#pbar{zoom:var(--ui)}
 #top .top-left button{font-size:14px;padding:6px 12px}
 #ltabs button{font-size:12.5px}
 .mitem .nm,.titem .tx,.hint,.chip{font-size:13px}
