@@ -9,10 +9,26 @@ MEDIA_EXT = ('.mp4', '.mov', '.m4v', '.mkv', '.webm', '.avi', '.wmv', '.mts', '.
 
 def nfc(s): return unicodedata.normalize('NFC', s)
 
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOOLS_FILE = '도구위치.json'   # 단동샘 편집기가 스킬을 복사할 때 자기 안의 ffmpeg/ffprobe 위치를 적어 둬요
+
+def _editor_tool(tool):
+    """편집기에 들어 있는 ffmpeg/ffprobe 위치 (스킬 폴더 → 지금 폴더의 단동샘스킬 → 지금 폴더 순서로 찾아요)."""
+    for d in (SKILL_DIR, os.path.join(os.getcwd(), '단동샘스킬'), os.getcwd()):
+        try:
+            with open(os.path.join(d, TOOLS_FILE), encoding='utf-8-sig') as f: p = (json.load(f) or {}).get(tool)
+        except Exception: continue
+        if not p or not os.path.isfile(p): continue
+        if os.name != 'nt' and p.lower().endswith('.exe'): continue   # 윈도우용 파일은 다른 운영체제에서 못 써요
+        if os.name != 'nt' and not os.access(p, os.X_OK): continue
+        return p
+    return None
+
 def need(tool):
-    p = shutil.which(tool)
+    p = os.environ.get('DDS_' + tool.upper()) or _editor_tool(tool) or shutil.which(tool)
     if not p:
-        sys.exit(f"[필요] {tool} 이(가) 없어요. 윈도우: 터미널에서 'winget install Gyan.FFmpeg' 로 설치한 뒤 터미널을 새로 열어 주세요.")
+        sys.exit(f"[필요] {tool} 을(를) 찾지 못했어요. 단동샘 편집기에서 이 작업 폴더를 한 번 열면 편집기 안의 {tool} 위치가 '단동샘스킬/{TOOLS_FILE}' 에 적혀 저절로 쓰여요. "
+                 "그래도 안 되면 윈도우: 터미널에서 'winget install Gyan.FFmpeg' 로 설치한 뒤 터미널을 새로 열어 주세요.")
     return p
 
 def ffprobe_json(path):

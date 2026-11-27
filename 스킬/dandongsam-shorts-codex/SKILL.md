@@ -25,9 +25,9 @@ description: 내 컴퓨터의 작업 폴더에 있는 영상·내레이션을 �
 
 ## 0. 환경 점검 (처음 한 번)
 
-- `python --version`, `ffmpeg -version`, `ffprobe -version`을 확인한다.
-- ffmpeg가 없으면(윈도우): `winget install Gyan.FFmpeg` 후 터미널을 새로 연다. 설치는 사용자에게 알리고 진행한다.
-- 음성 인식: `python -m pip install faster-whisper`. 첫 실행 때 모델(large-v3-turbo, 약 1.6GB)을 내려받아 시간이 걸린다.
+- `python --version`과 `python SKILL_DIR/scripts/ff.py ffmpeg -version`을 확인한다.
+- ffmpeg·ffprobe는 따로 설치하지 않는다: 편집기가 `SKILL_DIR/도구위치.json`에 편집기 안의 ffmpeg 위치를 적어 두고, 스크립트가 그것을 저절로 쓴다. 직접 ffmpeg 명령을 써야 하면 `ffmpeg` 대신 `python SKILL_DIR/scripts/ff.py ffmpeg ...`(ffprobe도 같음)로 실행한다. 이것도 안 될 때만(윈도우) `winget install Gyan.FFmpeg` 후 터미널을 새로 연다. 설치는 사용자에게 알리고 진행한다.
+- 음성 인식: 작업 폴더에 `받아적기/<파일 이름>.words.json`(편집기의 "🎤 받아 적기"로 만든 것)이 있으면 그대로 쓰니 설치가 필요 없다(transcribe.py가 저절로 가져온다). 없을 때만 `python -m pip install faster-whisper`. 첫 실행 때 모델(large-v3-turbo, 약 1.6GB)을 내려받아 시간이 걸린다.
 
 ## 1. 폴더 파악
 
@@ -51,7 +51,7 @@ python SKILL_DIR/scripts/transcribe.py "<내레이션/영상 파일>" --out "%TE
 python SKILL_DIR/scripts/transcribe.py "<파일1>" "<파일2>" --out-dir "%TEMP%\words"    (여러 파일은 한 번에: 모델을 한 번만 불러옴)
 ```
 
-- 단어별 시각이 담긴 JSON이 나온다. 이미 받아 적은 파일은 건너뛰니(같은 파일일 때) 다시 실행해도 된다. 말 없는 구간은 기본으로 걸러서 조용한 곳에 없는 말이 생기지 않는다. 반복·더듬은 문장은 마지막 완전한 테이크를 남기고, 의도적인 반복·강조는 살린다.
+- 단어별 시각이 담긴 JSON이 나온다. 편집기가 받아 적어 둔 파일(`받아적기/`)이 있으면 그것을 옮겨 쓴다. 이미 받아 적은 파일은 건너뛰니(같은 파일일 때) 다시 실행해도 된다. 말 없는 구간은 기본으로 걸러서 조용한 곳에 없는 말이 생기지 않는다. 반복·더듬은 문장은 마지막 완전한 테이크를 남기고, 의도적인 반복·강조는 살린다.
 - 반복은 눈으로만 찾지 말고 꼭 도구로 찾는다. 나온 후보는 모두 컷 계획에 넣는다(앞의 것을 자르고 뒤의 완전한 것을 남김):
 
 ```
@@ -65,10 +65,10 @@ python SKILL_DIR/scripts/repeats.py "%TEMP%\words.json"
 원본은 보존하고, 전체 길이의 깨끗한 WAV를 작업 폴더에 만든다(자르지 않는다. 삭제는 `.dsp`의 조각으로 표현한다).
 
 ```
-ffmpeg -y -i "<내레이션 원본>" -vn -af "highpass=f=80,loudnorm=I=-16:TP=-1:LRA=11" -ar 48000 -c:a pcm_s16le "<작업 폴더>\<원본명>_edited.wav"
+python SKILL_DIR/scripts/ff.py ffmpeg -y -i "<내레이션 원본>" -vn -af "highpass=f=80,loudnorm=I=-16:TP=-1:LRA=11" -ar 48000 -c:a pcm_s16le "<작업 폴더>\<원본명>_edited.wav"
 ```
 
-다 만든 뒤 `ffmpeg -i "<wav>" -af ebur128=peak=true -f null -`로 LUFS·트루피크를 재측정해 -16 LUFS 근처, -1 dBTP 이하인지 확인한다.
+다 만든 뒤 `python SKILL_DIR/scripts/ff.py ffmpeg -i "<wav>" -af ebur128=peak=true -f null -`로 LUFS·트루피크를 재측정해 -16 LUFS 근처, -1 dBTP 이하인지 확인한다.
 
 ## 3-1. AI 목소리 (편집설정.json 의 voice 가 있을 때)
 

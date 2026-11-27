@@ -2268,11 +2268,12 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const GFILE = { tips: '생활꿀팁', docu: '다큐쇼핑', product: '상품소개', aigen: 'AI생성영상', overseas: '해외영상요약', lecture: '강의편집' }, gName = (GENRES.find((g) => g[0] === settings.genre) || [0, '📚 강의 편집'])[1].replace(/^\S+\s/, '');
       const MODE_RULE = { auto: '', step: ' 기획, 대본, 컷 계획을 만들 때마다 먼저 보여 주고 내가 좋다고 하면 다음 단계로 넘어가 줘.', text: ' 이번에는 .dsp 를 만들지 말고 글만 써 줘: 장르에 맞게 대본은 "결과" 폴더에 "대본.txt"로, AI 생성 영상이면 장면별 이미지·영상 생성 프롬프트를 "결과" 폴더에 "프롬프트.txt"로 저장해 줘.' };
       const GENRE_RULE = settings.genre ? ` 이 영상은 "${gName}" 영상이야. 폴더 안 "단동샘스킬/장르/${GFILE[settings.genre]}.md"를 읽고 그 규칙대로 만들어 줘.` : '';
+      const GENRE_GPT = settings.genre ? ` 이 영상은 "${gName}" 영상이야. 첨부한 "${GFILE[settings.genre]}.md"를 읽고 그 규칙대로 만들어 줘.` : '';
       const VOICE_RULE = voice ? ' 내레이션은 내 목소리 대신 AI 목소리로 넣어 줘: 대본을 한 줄에 한 문장씩 "결과/대본.txt"로 저장한 뒤, "단동샘스킬/SKILL.md"의 "AI 목소리" 순서대로 단동샘스킬/scripts/narrate.py 를 실행해 이 폴더에 "내레이션.mp3"를 만들고(목소리·빠르기는 편집설정.json 의 voice), audio 에 넣어 줘. 영상 조각은 소리를 끄고 내레이션 길이에 맞춰 이어 붙이고, 자막은 narrate.py 가 만든 단어 시각으로 만들어 줘. 파이썬 실행이나 인터넷이 안 되면 대본.txt 만 저장하고 알려 줘.' : '';
       const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + VOICE_RULE + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
         codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
-        gpt: { name: 'ChatGPT', how: '채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json"을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.', prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. ${tail}` },
+        gpt: { name: 'ChatGPT', how: `채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json", "받아적기" 폴더 안의 파일${settings.genre ? `, "단동샘스킬/장르/${GFILE[settings.genre]}.md"` : ''}을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.`, prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. 첨부한 ".words.json" 파일(받아적기)이 있으면 음성 인식을 따로 하지 말고 그 단어 시각으로 말 없는 구간·군말·되풀이한 말을 잘라 영상을 여러 조각(clips 의 in/out)으로 나누고, 자막도 그 시각으로 만들어 줘. 받아적기 파일이 없고 소리를 알아들을 수 없으면 자막을 지어내지 말고 알려 줘. media 의 name 은 첨부한 영상 파일 이름 그대로(경로 없이) 쓰고, .dsp 는 설명(//) 없는 순수 JSON 으로, 시간은 초 단위 숫자로 써 줘. ${GENRE_RULE ? tail.replace(GENRE_RULE, GENRE_GPT) : tail}` },
         claude: { name: 'Claude 앱', how: 'Claude 앱에서 이 폴더를 연결한 뒤 아래 말을 보내요.', prompt: `"${P}" 폴더에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 폴더 안의 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 폴더에 접근할 수 없으면 추측하지 말고 먼저 알려 줘.` },
         cc: { name: 'Claude Code', how: '아래 버튼으로 이 폴더에서 Claude Code 를 열고 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.`, term: true },
       };
@@ -2283,6 +2284,33 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       else Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; aiOpen = false; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
       Rt.append(tabs, E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt)));
       const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
+      { // 🎤 받아 적기: 편집기가 작업 폴더의 영상 말소리를 먼저 글로 받아 적어 "받아적기" 폴더에 둬요 (AI가 그 시각으로 컷·자막을 만들어요)
+        const sb = E('button', '', '🎤 받아 적기'), at = sel.path; sb.title = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)';
+        let polling = false;
+        const paint = (st) => {
+          if (!st || st.error) return; const j = st.job;
+          if (st.dl.state === 'running') { sb.textContent = `⬇ 음성 인식 모델 받는 중 ${st.dl.pct}%`; sb.disabled = true; return true; }
+          if (j.mine && j.state === 'running') { sb.textContent = `⏳ 받아 적는 중 ${j.pct}%`; sb.disabled = true; return true; }
+          sb.disabled = false;
+          if (st.dl.state === 'error') { sb.textContent = '🎤 받아 적기'; toast(st.dl.msg, null, 7000); return false; }
+          sb.textContent = st.files && st.done >= st.files ? `✅ 받아 적기 끝 (${st.done}개)` : st.done ? `🎤 받아 적기 (${st.done}/${st.files})` : '🎤 받아 적기';
+          return false;
+        };
+        const wait = () => new Promise((r) => setTimeout(r, 900));
+        const poll = async (started) => { if (polling) return; polling = true; let sawDl = false, sawRun = !!started;
+          while (sel && sel.path === at && document.body.contains(sb)) {
+            const st = await fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).catch(() => null); if (!st || st.error) break;
+            if (paint(st)) { if (st.dl.state === 'running') sawDl = true; else sawRun = true; await wait(); continue; }
+            if (sawDl && st.have && !sawRun) { sawDl = false; const z = await post('/api/auto/stt', { path: at }); if (z.error) { toast(z.error, null, 6000); break; } sawRun = true; await wait(); continue; }   // 모델을 다 받았으면 바로 받아 적어요
+            if (sawRun && st.job.mine && st.job.state === 'error') toast(st.job.err, null, 7000);
+            else if (sawRun && st.job.mine && st.job.state === 'done') toast(st.files ? `받아 적었어요 (${st.done}/${st.files}개) → 받아적기 폴더` : '받아 적을 영상이 폴더에 없어요', null, 5000);
+            break;
+          }
+          polling = false; };
+        sb.onclick = async () => { const z = await post('/api/auto/stt', { path: at }); if (z.error) return toast(z.error, null, 6000); sb.disabled = true; poll(!!z.ok); };
+        fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).then((st) => { if (paint(st)) poll(); }).catch(() => {});
+        row.append(sb);
+      }
       if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }
       Rt.append(row);
       { // 작업 폴더에 복사된 스킬 (단동샘스킬 폴더)
@@ -2300,7 +2328,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       }
       // 결과
       Rt.append(E('div', 'asub', '완성된 결과 (눌러서 열기)'));
-      { const ib = E('button', 'primary aimp', '📥 받은 결과(.dsp) 가져오기'); const fi = E('input'); fi.type = 'file'; fi.accept = '.dsp,.json,.txt'; fi.hidden = true; ib.onclick = async () => { const r = await post('/api/auto/pickfile', { path: sel.path }); if (r.unsupported) return fi.click(); if (r.canceled) return; if (r.error) return toast(r.error, null, 6000); openResult({ file: r.file }); }; ib.title = 'ChatGPT 등에서 내려받은 .dsp 파일을 고르면 이 작업에 넣고 바로 열어요';
+      { const ib = E('button', 'primary aimp', '📥 받은 결과(.dsp) 가져오기'); const fi = E('input'); fi.type = 'file'; fi.accept = '.dsp,.json,.txt'; fi.hidden = true; ib.onclick = async () => { const r = await post('/api/auto/pickfile', { path: sel.path, from: ai === 'gpt' ? 'downloads' : '' }); if (r.unsupported) return fi.click(); if (r.canceled) return; if (r.error) return toast(r.error, null, 6000); openResult({ file: r.file }); }; ib.title = 'ChatGPT 등에서 내려받은 .dsp 파일을 고르면 이 작업에 넣고 바로 열어요';
         fi.onchange = async () => { const f = fi.files[0]; if (!f) return; const txt = await f.text(); const r = await fetch('/api/auto/import?path=' + encodeURIComponent(sel.path) + '&name=' + encodeURIComponent(f.name), { method: 'POST', body: txt }).then((x) => x.json()).catch(() => ({ error: '서버에 연결할 수 없어요' })); if (r.error) return toast(r.error, null, 7000); openResult({ file: r.file }); };
         Rt.append(ib, fi); }
       const rl = E('div', 'ajobs res'); Rt.append(rl);

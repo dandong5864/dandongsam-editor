@@ -764,6 +764,7 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
 .dsp 는 UTF-8 JSON 텍스트 파일입니다. 영상 자체는 넣지 않고 "어느 영상의 몇 초~몇 초를 쓰는지"만 적습니다.
 영상 파일은 이 폴더에 그대로 두세요. 사용자가 편집기에서 열면 같은 이름의 파일을 자동으로 찾아 연결합니다.
 ※ 원본 영상은 이름도 내용도 바꾸지 말고, 편집기가 회전·픽셀 비율·화면 비율을 알아서 맞추니 비율 보정용 복사본은 만들지 마세요.
+※ 아래 예시의 // 뒤는 설명이에요. 실제 .dsp 에는 설명을 넣지 말고 순수 JSON 만 쓰세요. 시간은 모두 초 단위 숫자(예: 12.5)로 쓰세요.
 
 [전체 모양]
 {
@@ -822,9 +823,17 @@ const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
 - 도형: kind "shape", shape 는 "arrow"(화살표) "check"(✔) "cross"(✖) "checkbox"(☑) "pointer"(마우스 포인터) "click"(클릭 표시 원) "rect" "ellipse". x,y(중심 %), w,h(% 너비 기준), rot, fill:true, fillColor, stroke, strokeColor, strokeW, opacity, start, end, text:"".
 - 포인터 이동: pointer 도형에 mv:true, x2,y2(도착 %), mvDur(이동 초). 도착 순간에 같은 자리에 "click" 도형을 0.4초쯤 추가하면 클릭처럼 보여요.
 
+[받아적기 폴더] (있으면 꼭 쓰세요)
+- 편집기의 "🎤 받아 적기"로 만든 파일이에요: 받아적기/<영상 파일 이름>.words.json (예: 받아적기/영상1.mp4.words.json)
+- 모양: { "file": "영상1.mp4", "duration": 62.4, "segments": [ { "start": 0.5, "end": 3.1, "text": "안녕하세요 오늘은", "words": [ { "w": " 안녕하세요", "s": 0.5, "e": 1.2 }, ... ] } ] }
+  시각(초)은 그 영상 파일 기준이에요. 음성 인식을 따로 하지 말고 이 시각을 그대로 쓰세요.
+- 컷 편집: 단어 사이가 3초 이상 비는 곳, 군말, 같은 말을 되풀이한 앞부분은 잘라 내고, 말하는 구간만 clips 의 in/out 으로 여러 조각으로 나눠 이어 붙이세요. 자를 때 앞뒤로 0.15초쯤 여유를 두세요. (영상 하나를 통째로 한 조각만 넣지 마세요)
+- 자막: 남긴 조각 안의 단어만, 완성 영상 시각(조각 시작 시각 + (단어 시각 - in) ÷ speed)으로 바꿔 texts 에 넣으세요.
+- 파일 이름(media 의 name)은 경로 없이 영상 파일 이름만 그대로 쓰세요 (예: "/mnt/data/영상1.mp4" 가 아니라 "영상1.mp4").
+
 [규칙]
 - 사용자가 "승인 후 진행"을 말하지 않았다면 중간에 멈추지 말고 끝까지 만들어 주세요.
-- 음성 인식(Whisper 등)이 안 되면 추측해서 쓰지 말고, 결과에 "자막 못 만듦"이라고 적은 뒤 사용자에게 알려 주세요 (편집기의 "목소리로 자막 만들기"로 만들 수 있어요).
+- 받아적기 폴더가 없고 음성 인식(Whisper 등)도 안 되면 추측해서 쓰지 말고, 결과에 "자막 못 만듦"이라고 적은 뒤 사용자에게 알려 주세요 (편집기의 "목소리로 자막 만들기"로 만들 수 있어요).
 - 모든 id 는 서로 달라야 합니다.
 - in < out, start < end. 모든 mediaId 는 media 에 있어야 합니다.
 - "결과" 폴더에 만든 .dsp 파일 이름은 한글이어도 됩니다 (예: 내영상_편집.dsp).
@@ -841,11 +850,61 @@ function copyDir(src, dst) {
   }
 }
 const skillDone = new Set();
-function putSkill(dir) { if (skillDone.has(dir) && fs.existsSync(path.join(dir, '단동샘스킬', 'SKILL.md'))) return; try { if (fs.existsSync(SKILL_SRC)) { copyDir(SKILL_SRC, path.join(dir, '단동샘스킬')); skillDone.add(dir); } } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
+// 스킬의 파이썬 도구가 ffmpeg 를 따로 설치하지 않아도 되게, 편집기 안의 ffmpeg/ffprobe 위치를 스킬 폴더에 적어 둬요
+function putTools(sd) {
+  const t = {}; [['ffmpeg', FFMPEG], ['ffprobe', FFPROBE]].forEach(([k, v]) => { if (path.isAbsolute(v) && fs.existsSync(v)) t[k] = v; });
+  if (!Object.keys(t).length) return; const f = path.join(sd, '도구위치.json'), txt = JSON.stringify(t, null, 1);
+  try { if (fs.readFileSync(f, 'utf8') === txt) return; } catch (e) {} try { fs.writeFileSync(f, txt, 'utf8'); } catch (e) {}
+}
+function putSkill(dir) { if (skillDone.has(dir) && fs.existsSync(path.join(dir, '단동샘스킬', 'SKILL.md'))) return; try { if (fs.existsSync(SKILL_SRC)) { const sd = path.join(dir, '단동샘스킬'); copyDir(SKILL_SRC, sd); putTools(sd); skillDone.add(dir); } } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
   fs.writeFileSync(path.join(dir, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8');
   putSkill(dir);
+}
+// AI(특히 ChatGPT)가 준 .dsp 는 설명 주석(//)·코드 블록(```)·끝 쉼표가 섞여 있는 경우가 많아요 → 최대한 고쳐서 읽어요
+function parseDsp(txt) {
+  let t = String(txt || '').replace(/^\uFEFF/, '').trim();
+  try { return JSON.parse(t); } catch (e) {}
+  const fence = t.match(/```(?:json|dsp)?\s*([\s\S]*?)```/i); if (fence) t = fence[1].trim();
+  const a = t.indexOf('{'), b = t.lastIndexOf('}'); if (a >= 0 && b > a) t = t.slice(a, b + 1);
+  let o = '', q = false;   // 문자열 밖의 // 주석과 /* */ 주석을 지워요
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { o += c; if (c === '\\') { o += t[i + 1] || ''; i++; } else if (c === '"') q = false; continue; }
+    if (c === '"') { q = true; o += c; continue; }
+    if (c === '/' && t[i + 1] === '/') { while (i < t.length && t[i] !== '\n') i++; o += '\n'; continue; }
+    if (c === '/' && t[i + 1] === '*') { const e = t.indexOf('*/', i + 2); i = e < 0 ? t.length : e + 1; continue; }
+    o += c;
+  }
+  o = o.replace(/,(\s*[}\]])/g, '$1');
+  return JSON.parse(o);
+}
+// AI가 시각을 "00:12.5", "1:02:03", "12.5s" 처럼 글자로 적었으면 초(숫자)로 바꿔요
+function secOf(v) {
+  if (typeof v === 'number') return v; if (typeof v !== 'string') return v; const s = v.trim().replace(/,/g, '.').replace(/\s*(s|sec|초)$/i, '');
+  if (/^-?\d+(\.\d+)?$/.test(s)) return +s;
+  const m = s.match(/^(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)$/); if (m) return (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]);
+  return v;
+}
+// AI 결과를 편집기가 알아듣는 모양으로 맞춰요: 경로가 붙은 파일 이름("/mnt/data/영상.mp4") → 이름만, 글자 시각 → 초, in/out 대신 start/end 로 적은 영상 조각
+function tidyAiDsp(data) {
+  const base = (x) => String(x).split(/[\\/]/).pop();
+  let mm = data.media; if (mm && typeof mm === 'object') (Array.isArray(mm) ? mm.map((m, i) => [i, m]) : Object.entries(mm)).forEach(([k, m]) => { if (typeof m === 'string') mm[k] = base(m); else if (m) { if (m.name) m.name = base(m.name); if (m.file) m.file = base(m.file); } });
+  else data.media = mm = {};
+  const T = ['in', 'out', 'start', 'end', 'mvDur'];
+  const clips = Array.isArray(data.clips) ? data.clips : [], audio = Array.isArray(data.audio) ? data.audio : [];
+  [...clips, ...audio, ...(Array.isArray(data.texts) ? data.texts : [])].forEach((c) => { if (!c || typeof c !== 'object') return; T.forEach((k) => { if (k in c) c[k] = secOf(c[k]); }); ['name', 'file'].forEach((k) => { if (typeof c[k] === 'string') c[k] = base(c[k]); }); });
+  clips.forEach((c) => { if (c && c.in === undefined && c.out === undefined && c.start !== undefined && c.end !== undefined) { c.in = c.start; c.out = c.end; delete c.start; delete c.end; } });
+  if (!Array.isArray(mm)) {   // mediaId 가 media 에 없을 때: 파일 이름이면 media 에 넣고, 영상이 하나뿐이면 그것으로 이어요
+    const keys = Object.keys(mm), nameOf = (k) => { const m = mm[k]; return typeof m === 'string' ? m : (m && (m.name || m.file)) || ''; };
+    const vids = keys.filter((k) => !isAud(nameOf(k))), auds = keys.filter((k) => isAud(nameOf(k)));
+    const fix = (c, pool) => { if (!c || c.mediaId === undefined || c.mediaId === null || keys.includes(String(c.mediaId))) return;
+      const id = String(c.mediaId); if (MED_RE.test(id)) { const nm = base(id), k = keys.find((q) => nameOf(q).normalize('NFC') === nm.normalize('NFC')); if (k) c.mediaId = k; else { mm[nm] = { name: nm }; keys.push(nm); c.mediaId = nm; } return; }
+      if (pool.length === 1) c.mediaId = pool[0]; };
+    clips.forEach((c) => fix(c, vids)); audio.forEach((c) => fix(c, auds));
+  }
+  return data;
 }
 function countIn(d, re) { let n = 0; try { fs.readdirSync(d, { withFileTypes: true }).forEach((e) => { if (e.isFile() && re.test(e.name)) n++; }); } catch (e) {} return n; }
 function jobInfo(dir, kind) {
@@ -873,7 +932,7 @@ function pickFolder() {
 function pickFile(initDir) {   // 내 컴퓨터 파일 선택 창 (시작 위치 = 작업 폴더의 결과 폴더)
   return new Promise((resolve) => {
     let cmd, args; const env = { ...process.env, DSP_INIT: initDir };
-    if (process.platform === 'win32') { cmd = 'powershell.exe'; args = ['-NoProfile', '-STA', '-Command', "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $f=New-Object System.Windows.Forms.Form; $f.TopMost=$true; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.InitialDirectory=$env:DSP_INIT; $d.Title='받은 결과(.dsp) 파일을 고르세요'; $d.Filter='단동샘 프로젝트 (*.dsp;*.json)|*.dsp;*.json|모든 파일 (*.*)|*.*'; if($d.ShowDialog($f) -eq 'OK'){ $d.FileName }"]; }
+    if (process.platform === 'win32') { cmd = 'powershell.exe'; args = ['-NoProfile', '-STA', '-Command', "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $f=New-Object System.Windows.Forms.Form; $f.TopMost=$true; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.InitialDirectory=$env:DSP_INIT; $d.Title='받은 결과(.dsp) 파일을 고르세요'; $d.Filter='단동샘 프로젝트 (*.dsp;*.json;*.txt)|*.dsp;*.json;*.txt|모든 파일 (*.*)|*.*'; if($d.ShowDialog($f) -eq 'OK'){ $d.FileName }"]; }
     else if (process.platform === 'darwin') { cmd = 'osascript'; args = ['-e', 'POSIX path of (choose file with prompt "받은 결과(.dsp) 파일을 고르세요" default location (POSIX file (system attribute "DSP_INIT")))']; }
     else return resolve(null);
     let out = ''; const ch = spawn(cmd, args, { windowsHide: true, env }); ch.stdout.on('data', (d) => { out += d; }); ch.on('error', () => resolve(null)); ch.on('close', () => resolve(out.trim().replace(/[\r\n]+$/, '')));
@@ -1216,6 +1275,56 @@ async function sttRun(clips, lang) {
     J.state = sttStop ? 'stopped' : 'done'; J.pct = 100; J.msg = sttStop ? '중단했어요' : '끝!';
   } catch (e) { J.state = 'error'; J.err = String(e.message || e); J.msg = '문제가 생겼어요'; console.error('자동 자막', J.err); }
 }
+// ---- 자동 편집: 작업 폴더의 영상·소리를 편집기가 먼저 받아 적어 "받아적기" 폴더에 둬요 ----
+// AI는 이 파일로 말 없는 구간을 찾아 자르고 자막을 만들어요. 파이썬 음성 인식이 없는 AI(ChatGPT 등)도 첨부해서 쓸 수 있어요.
+// 모양은 스킬의 transcribe.py 결과와 같아요: { file, src:{size,mtime}, duration, segments:[{start,end,text,words:[{w,s,e}]}] }
+const AUTO_STT_DIR = '받아적기';
+const fileStamp = (f) => { const st = fs.statSync(f); return { size: st.size, mtime: Math.floor(st.mtimeMs / 1000) }; };
+function autoSttTargets(dir) {
+  let l = []; try { l = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) {}
+  return l.filter((e) => e.isFile() && MED_RE.test(e.name) && !/_edited\.wav$/i.test(e.name)).map((e) => path.join(dir, e.name)).sort();
+}
+function autoSttOut(f) { return path.join(path.dirname(f), AUTO_STT_DIR, path.basename(f) + '.words.json'); }
+function autoSttDone(f) { try { const j = JSON.parse(fs.readFileSync(autoSttOut(f), 'utf8')); const a = j.src || {}, b = fileStamp(f); return a.size === b.size && a.mtime === b.mtime; } catch (e) { return false; } }
+function toWordJson(raw, len) {   // 낱말 조각(앞 공백 = 새 낱말) → 낱말 → 문장 단위 구간
+  const words = []; raw.forEach((q) => { if (q.sp || !words.length) words.push({ w: q.text, s: q.start, e: q.end }); else { const w = words[words.length - 1]; w.w += q.text; w.e = q.end; } });
+  const segs = []; let cur = null;
+  words.forEach((w) => {
+    if (cur && (w.s - cur.end > 0.8 || /[.?!。…]$/.test(cur.words[cur.words.length - 1].w) || cur.text.length + 1 + w.w.length > 40)) { segs.push(cur); cur = null; }
+    if (!cur) cur = { start: w.s, end: w.e, text: w.w, words: [] }; else { cur.text += ' ' + w.w; cur.end = w.e; }
+    cur.words.push({ w: ' ' + w.w, s: +w.s.toFixed(3), e: +Math.min(len, w.e).toFixed(3) });
+  });
+  if (cur) segs.push(cur);
+  return segs.map((g) => ({ start: +g.start.toFixed(3), end: +Math.min(len, g.end).toFixed(3), text: g.text, words: g.words }));
+}
+async function autoSttRun(dir, force) {
+  const J = stt.job = { state: 'running', pct: 0, msg: '준비하는 중…', segs: [], err: '', auto: dir, made: 0, skipped: 0, silent: 0 }; sttStop = false;
+  try {
+    const files = autoSttTargets(dir).filter((f) => { if (!force && autoSttDone(f)) { J.skipped++; return false; } return true; });
+    const save = (f, len, segs, extra) => { const op = autoSttOut(f); fs.mkdirSync(path.dirname(op), { recursive: true }); fs.writeFileSync(op, JSON.stringify({ file: path.basename(f), src: fileStamp(f), duration: +(+len || 0).toFixed(3), by: '단동샘 편집기', ...extra, segments: segs }, null, 1), 'utf8'); };
+    const infos = []; for (const f of files) { let i = null; try { i = await probe(f); } catch (e) {} if (i && i.hasAudio && i.duration > 0.3) infos.push({ f, len: i.duration }); else { J.silent++; try { save(f, i && i.duration, [], { noAudio: true }); } catch (e) {} } }   // 소리 없는 영상도 "소리 없음"으로 적어 둬요
+    if (infos.length && !sttCtx) {
+      let mod; try { mod = require('@fugood/whisper.node'); } catch (e) { throw new Error('음성 인식 구성요소를 불러오지 못했어요 (' + e.message.split('\n')[0] + ')'); }
+      J.msg = '음성 인식 모델을 켜는 중… (처음엔 조금 걸려요)'; sttCtx = await mod.initWhisper({ filePath: STT_FILE, useGpu: false });
+    }
+    const total = infos.reduce((a, x) => a + x.len, 0) || 1; let done = 0;
+    for (let i = 0; i < infos.length; i++) {
+      if (sttStop) break;
+      const { f, len } = infos[i]; J.msg = `받아 적는 중… ${path.basename(f)} (${i + 1}/${infos.length})`;
+      const pcm = await pcmOf(f, 0, len); const raw = [];
+      if (pcm.length >= 3200) {
+        const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2)), base = done;
+        const job = sttCtx.transcribeData(samples.buffer.slice(samples.byteOffset, samples.byteOffset + samples.byteLength), { language: 'ko', temperature: 0, maxLen: 1, splitOnWord: true, tokenTimestamps: true, onProgress: (p) => { J.pct = Math.min(99, Math.floor((base + len * p / 100) / total * 100)); } });
+        sttCur = job; const res = await job.promise; sttCur = null;
+        if (sttStop) break;
+        (res.segments || []).forEach((sg) => { const r = String(sg.text || ''), t = r.trim(); if (!t) return; const a = Math.max(0, sg.t0 / 1000), b = Math.min(len, sg.t1 / 1000); if (b <= a) return; raw.push({ sp: /^\s/.test(r), text: t, start: a, end: b }); });
+      }
+      save(f, len, toWordJson(raw, len)); J.made++;
+      done += len; J.pct = Math.min(99, Math.floor(done / total * 100));
+    }
+    J.state = sttStop ? 'stopped' : 'done'; J.pct = 100; J.msg = sttStop ? '중단했어요' : '끝!';
+  } catch (e) { J.state = 'error'; J.err = String(e.message || e); J.msg = '문제가 생겼어요'; console.error('받아 적기', J.err); }
+}
 function revealPath(p) {
   const abs = path.resolve(p);
   if (!abs.startsWith(DIRS.out) && !abs.startsWith(DIRS.cap) && !Object.values(jobs).some((j) => j && path.resolve(j.file) === abs)) return;
@@ -1325,7 +1434,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/import') {
       const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
       let txt = ''; await new Promise((ok) => { const ch = []; req.on('data', (c) => ch.push(c)); req.on('end', () => { txt = Buffer.concat(ch).toString('utf8').replace(/^\uFEFF/, ''); ok(); }); });
-      let j; try { j = JSON.parse(txt); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 올려 주세요' }); }
+      let j; try { j = parseDsp(txt); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 올려 주세요' }); }
       if (!j || typeof j !== 'object') return json(res, 400, { error: '편집 파일을 읽을 수 없어요' });
       const nm = (path.basename(String(u.searchParams.get('name') || '결과')).replace(/\.(dsp|json|txt)$/i, '').replace(/[\\/:*?"<>|]/g, '') || '결과') + '.dsp';
       fs.mkdirSync(path.join(dir, '결과'), { recursive: true }); const f = path.join(dir, '결과', nm); fs.writeFileSync(f, JSON.stringify(j), 'utf8'); return json(res, 200, { file: f });
@@ -1333,8 +1442,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/pickfile') {   // 작업 폴더의 결과 폴더를 연 상태로 파일 고르기
       const b = await readBody(req); const dir = path.resolve(String(b.path || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
       const R = path.join(dir, '결과'); fs.mkdirSync(R, { recursive: true });
-      const f = await pickFile(R); if (f === null) return json(res, 200, { unsupported: true }); if (!f) return json(res, 200, { canceled: true });
-      let j; try { j = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 골라 주세요' }); }
+      const DL = path.join(os.homedir(), 'Downloads');   // ChatGPT 등 웹에서 받은 파일은 보통 '다운로드' 폴더에 있어요
+      const f = await pickFile(b.from === 'downloads' && fs.existsSync(DL) ? DL : R); if (f === null) return json(res, 200, { unsupported: true }); if (!f) return json(res, 200, { canceled: true });
+      let j; try { j = parseDsp(fs.readFileSync(f, 'utf8')); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 골라 주세요' }); }
       if (!j || typeof j !== 'object') return json(res, 400, { error: '편집 파일을 읽을 수 없어요' });
       let dest = path.resolve(f);
       if (path.dirname(dest) !== path.resolve(R) || !/\.dsp$/i.test(dest)) { const nm = (path.basename(f).replace(/\.(dsp|json|txt)$/i, '').replace(/[\\/:*?"<>|]/g, '') || '결과') + '.dsp'; dest = path.join(R, nm); fs.writeFileSync(dest, JSON.stringify(j), 'utf8'); }
@@ -1346,6 +1456,17 @@ const server = http.createServer(async (req, res) => {
       const walk = (d, rel, depth) => { let l = []; try { l = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; } l.forEach((e) => { if (e.name === '__pycache__' || e.name.endsWith('.pyc')) return; const r = rel ? rel + '/' + e.name : e.name; if (e.isDirectory()) { if (depth < 3) walk(path.join(d, e.name), r, depth + 1); } else files.push(r); }); };
       walk(sd, '', 0); let text = ''; try { text = fs.readFileSync(path.join(sd, 'SKILL.md'), 'utf8'); } catch (e) {}
       return json(res, 200, { dir: sd, exists: !!text, files: files.sort(), text });
+    }
+    if (req.method === 'GET' && p === '/api/auto/stt') {   // 받아 적기 상태 (작업 폴더 기준)
+      const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
+      const files = autoSttTargets(dir), done = files.filter(autoSttDone).length, J = stt.job;
+      return json(res, 200, { have: sttHave(), dl: stt.dl, files: files.length, done, job: { state: J.state, pct: J.pct, msg: J.msg, err: J.err, mine: J.auto === dir, made: J.made || 0, skipped: J.skipped || 0, silent: J.silent || 0 } });
+    }
+    if (req.method === 'POST' && p === '/api/auto/stt') {
+      const b = await readBody(req); const dir = path.resolve(String(b.path || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
+      if (!sttHave()) { sttDownload(); return json(res, 200, { downloading: true }); }
+      if (stt.job.state === 'running') return json(res, 400, { error: '이미 받아 적는 중이에요' });
+      autoSttRun(dir, !!b.force); return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/auto/openfolder') {
       const b = await readBody(req); if (!autoAllowed(String(b.path || ''))) return json(res, 400, { error: '열 수 없는 폴더예요' });
@@ -1373,8 +1494,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/open') {
       const b = await readBody(req); const f = path.resolve(String(b.file || ''));
       if (!autoAllowed(f) || !/\.dsp$/i.test(f) || !fs.existsSync(f)) return json(res, 400, { error: '편집 파일을 찾을 수 없어요' });
-      let j; try { j = JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return json(res, 400, { error: '편집 파일을 읽을 수 없어요 (형식이 맞지 않아요)' }); }
-      const data = j.data || j; const names = new Set(); { let mm = data.media || {}; (Array.isArray(mm) ? mm : Object.values(mm)).forEach((m) => { const nm = typeof m === 'string' ? m : (m && (m.name || m.file)); if (nm) names.add(String(nm)); }); (data.clips || []).concat(data.audio || []).forEach((c) => { const nm = c && (c.name || c.file); if (nm) names.add(String(nm)); }); }
+      let j; try { j = parseDsp(fs.readFileSync(f, 'utf8')); } catch (e) { return json(res, 400, { error: '편집 파일을 읽을 수 없어요 (형식이 맞지 않아요)' }); }
+      if (!j || typeof j !== 'object') return json(res, 400, { error: '편집 파일을 읽을 수 없어요' });
+      const data = tidyAiDsp(j.data && typeof j.data === 'object' ? j.data : j); const names = new Set(); { let mm = data.media || {}; (Array.isArray(mm) ? mm : Object.values(mm)).forEach((m) => { const nm = typeof m === 'string' ? m : (m && (m.name || m.file)); if (nm) names.add(String(nm)); }); (data.clips || []).concat(data.audio || []).forEach((c) => { const nm = c && (c.name || c.file); if (nm) names.add(String(nm)); }); }
       const added = [], missing = [], linked = []; const jobDir = path.basename(path.dirname(f)) === '결과' ? path.dirname(path.dirname(f)) : path.dirname(f);
       const todo = [...names].filter((nm) => { const N = nm.normalize('NFC'); if (Object.values(media).find((m) => String(m.name).normalize('NFC') === N)) return false;
         const al = Object.values(media).find((m) => (m.alias || []).some((x) => String(x).normalize('NFC') === N)); if (al) { linked.push({ from: nm, to: al.name }); return false; } return true; });
