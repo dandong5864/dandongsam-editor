@@ -2132,7 +2132,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
   async function show() {
     const info = await fetch('/api/auto/jobs').then((r) => r.json()).catch(() => null);
     if (!info) return toast('서버에 연결할 수 없어요');
-    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false;   // 주로 쓰는 AI는 기억해 둬요
+    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false, aiOpen = false;   // 주로 쓰는 AI는 기억해 둬요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
     const d = E('div', 'dlg auto-dlg', '<h2>AI 자동 편집</h2>');
     const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.insertBefore(xb, d.firstChild);
@@ -2180,8 +2180,8 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         const kc = chips([['normal', '🎬 일반 영상'], ['lecture', '📚 강의 영상']], lecture ? 'lecture' : 'normal', (v) => { opt.kind = v; saveOpt(); draw(); }); kc.classList.add('seg'); kr.append(kc); Rt.append(kr); }
       // 만들 영상(장르)과 진행 방식: 편집설정.json 에 저장되고, AI는 단동샘스킬/장르/ 안의 그 장르 파일을 읽어요
       const GENRES = [['none', '🎬 일반', '장르 없이 컷 편집과 자막'], ['tips', '💡 생활 꿀팁', '살림·주방·청소·수납 영상으로 후킹 대본·자막'], ['docu', '📜 다큐 쇼핑', '제품의 역사·원리를 이야기로 풀어 쇼핑과 연결'], ['product', '🛒 상품 소개', '불편 → 해결 → 특징 → 구매 유도'], ['aigen', '🤖 AI 생성 영상', 'AI로 만든 장면들을 이야기 순서대로 편집'], ['overseas', '🌏 해외 영상 요약', '사용 권한 확인 · 번역 · 독창적 해설 · 출처 표시']];
-      const MODES = [['auto', '⚡ 완전 자동', '중간 질문 없이 끝까지'], ['step', '✋ 단계별 확인', '기획·대본·컷 계획마다 보여 주고 확인받기'], ['edit', '✂️ 편집만', '대본 없이 있는 영상·음성으로 편집'], ['script', '📝 대본만', '대본만 써서 결과 폴더에 저장'], ['prompt', '🎨 프롬프트만', '이미지·영상 생성 프롬프트만 써서 저장']];
-      const genre = ratio === '9:16' && GENRES.some((g) => g[0] === opt.genre) ? opt.genre : 'none', mode = MODES.some((m) => m[0] === opt.mode) ? opt.mode : 'auto';
+      const MODES = [['auto', '⚡ 완전 자동', '중간 질문 없이 끝까지'], ['step', '✋ 단계별 확인', '기획·대본·컷 계획마다 보여 주고 확인받기'], ['text', '📝 글만 받기', '영상 편집 없이 대본이나 장면별 생성 프롬프트만 받기']];
+      const genre = ratio === '9:16' && GENRES.some((g) => g[0] === opt.genre) ? opt.genre : 'none', mode = ['script', 'prompt'].includes(opt.mode) ? 'text' : MODES.some((m) => m[0] === opt.mode) ? opt.mode : 'auto';
       const row3 = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list.map(([k, l]) => [k, l]), cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); [...c.children].forEach((b, i) => { b.title = list[i][2]; }); w.append(c); Rt.append(w); };
       if (ratio === '9:16') row3('만들 영상', GENRES, genre, (k) => { opt.genre = k; });
       row3('진행 방식', MODES, mode, (k) => { opt.mode = k; });
@@ -2210,22 +2210,26 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         title: ratio === '9:16' && titleKey !== 'none' ? styleOfKey(titleKey, titles, TITLEDEF) : null,
         portrait: LAND ? (['rot90', 'rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90') : null, subtitle: styleOfKey(subKey, subs, SUBDEF), subSplit: opt.split === 'fast' ? 'fast' : 'slow', lecture, stepCard, genre: lecture ? 'lecture' : (genre === 'none' ? null : genre), mode };
       post('/api/auto/settings', { path: sel.path, settings });
-      const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); Rt.append(w); };
+      const pick = (label, list, cur, set) => { const w = E('div', 'arow ap'); w.append(E('span', 'alab', label)); const c = chips(list, cur, (k) => { set(k); saveOpt(); draw(); }); c.classList.add('seg', 'wrapchips'); w.append(c); dz.append(w); };
+      const dz = E('div'), dOpen = ld('vtk.autodesign', '0') === '1';   // 꾸미기(템플릿·제목·자막·자막 나누기)는 접어 두고 고른 것만 한 줄로 보여 줘요
       if (ratio === '9:16') {
         pick('템플릿', [['none', '🚫 없음'], ...TPLS.map((t, i) => ['t' + i, t.n]), ...tpls.map((t, i) => ['m' + i, '⭐ ' + t.n])], tplKey, (k) => { opt.tpl = k; });
         pick('쇼츠 제목', [['none', '🚫 안 넣기'], ['preset', '2줄 (흰색 / 노랑)'], ...titles.map((t, i) => ['m' + i, '⭐ ' + t.n])], titleKey, (k) => { opt.title = k; });
       }
-      if (lecture) { pick('템플릿', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]).filter((_, i) => ['STEP 번호 + 제목', '자료 받기'].includes(CARD_RECS[i].n))], cardKey, (k) => { opt.card = k; }); if (cardSum) Rt.append(E('div', 'apath', esc(cardSum))); }
+      if (lecture) { pick('템플릿', [['none', '🚫 안 넣기'], ...CARD_RECS.map((c, i) => ['r' + i, c.n]).filter((_, i) => ['STEP 번호 + 제목', '자료 받기'].includes(CARD_RECS[i].n))], cardKey, (k) => { opt.card = k; }); if (cardSum) dz.append(E('div', 'apath', esc(cardSum))); }
       if (LAND) pick('세로 영상', [['rot90', '↻ 90° 돌려서 꽉 채우기'], ['rot270', '↺ 반대로 90°'], ['keep', '그대로 두기']], ['rot270', 'keep'].includes(opt.por) ? opt.por : 'rot90', (k) => { opt.por = k; });
       pick('자막', [['def', '기본'], ...(ratio === '9:16' ? [['shorts', '쇼츠 자막']] : []), ...subs.map((t, i) => ['m' + i, '⭐ ' + t.n])], subKey, (k) => { opt.subBy[typeKey] = k; });
       pick('자막 나누기', SPLIT_MODES, opt.split === 'fast' ? 'fast' : 'slow', (k) => { opt.split = k; });
-      if (!subs.length) Rt.append(E('div', 'apath', '기본 = 글꼴 Cafe24 쑥쑥 · 흰 글자 · 검정 테두리 ' + SUBDEF.outline + ' · 크기 ' + SUBDEF.size + ' · 가로 50% · 세로 ' + SUBDEF.y + '% · 편집기에서 "내 자막 스타일"을 저장하면 여기서 고를 수 있어요'));
+      if (!subs.length) dz.append(E('div', 'apath', '기본 = 글꼴 Cafe24 쑥쑥 · 흰 글자 · 검정 테두리 ' + SUBDEF.outline + ' · 크기 ' + SUBDEF.size + ' · 가로 50% · 세로 ' + SUBDEF.y + '% · 편집기에서 "내 자막 스타일"을 저장하면 여기서 고를 수 있어요'));
+      { const sum = [...dz.querySelectorAll('.chip.on')].map((b) => b.textContent.replace(/^[^0-9A-Za-z가-힣⭐]+/, '')).join(' · ');
+        const hr = E('div', 'arow ap'); hr.append(E('span', 'alab', '꾸미기')); const hc = E('div', 'chips seg wrapchips'); const hb = E('button', 'chip', esc(sum) + (dOpen ? ' ▴' : ' ▾')); hb.title = dOpen ? '접기' : '템플릿·제목·자막 바꾸기'; hb.style.cssText = 'grid-column:1/-1;width:100%;max-width:none;white-space:normal;height:auto;min-height:44px;padding:8px 14px';
+        hb.onclick = () => { sv('vtk.autodesign', dOpen ? '0' : '1'); draw(); }; hc.append(hb); hr.append(hc); dz.hidden = !dOpen; Rt.append(hr, dz); }
       const P = sel.path, R = P + info.sep + '결과', rt = ratio === '9:16' ? '9:16 세로 (쇼츠)' : '16:9 가로 (유튜브)', cv = ratio;
       const por = settings.portrait === 'keep' ? '세로로 찍은 영상은 돌리지 말고 그대로 둬.' : '세로로 찍은 영상(화면이 세로인 영상)은 가로 화면에 꽉 차도록 클립의 rot 를 ' + (settings.portrait === 'rot270' ? '270' : '90') + ' 으로 하고 fit 은 contain 으로 해 줘(자르거나 흐린 배경으로 채우지 마).';
       const tail0 = `영상 모양은 ${rt}야. .dsp 의 "canvas" 값은 "${cv}"로 해 줘. ${ratio === '9:16' ? '폴더 안의 "편집설정.json"에 적힌 템플릿·제목·자막 스타일을 그대로 .dsp 에 써 줘.' + (settings.title ? ' 쇼츠 제목은 영상 내용에 맞게 2줄로 지어 줘.' : '') : '가로 영상이라 제목 글자와 색 띠 템플릿은 넣지 마(.dsp 의 "tpl" 은 null, 제목 글자 항목은 만들지 마). 컷 편집(말 없는 구간·군말·반복 잘라내기)을 한 뒤 하단 자막만 넣고, 자막 스타일은 폴더 안 "편집설정.json"의 subtitle 값을 그대로 써 줘(가로 롱폼 크기라 쇼츠보다 작아). ' + por} 원본 영상은 이름도 내용도 바꾸지 말고 그대로 연결해 줘(비율 보정용 복사본은 만들지 마. 편집기가 알아서 맞춰). 내레이션이 있으면 영상 조각은 소리를 끄고 내레이션은 따로 audio 로 넣어 줘. 중간에 승인을 묻지 말고 끝까지 만들어 줘. 음성 인식이 안 되면 자막을 지어내지 말고 못 만들었다고 알려 줘.` + (lecture ? ' 이 영상은 시청자가 화면을 보며 따라 하는 강의(실습) 영상이야. "하단 자막만"은 제목 글자와 색 띠를 빼라는 뜻일 뿐, 화면 강조를 빼라는 뜻이 아니야. 버튼·메뉴·입력칸을 눌러야 하는 말이 나오는 순간에는 그 위치에 화살표나 네모 테두리를 넣고 누르는 순간에는 클릭 표시를 넣어 줘. 단계가 끝나거나 결과를 확인하는 순간에는 체크 표시를 넣고, 하면 안 되는 것은 ✖ 표시를 넣어 줘. 글씨가 작거나 좁은 영역을 보여 줄 때는 부드러운 확대를 넣어 줘. 예시 이미지나 비교 자료가 있으면 그 말을 하는 타이밍에 띄우고, 여러 곳을 한꺼번에 강조하지 말고 한 번에 한 곳씩 2~4초만 보여 줘. 자막과 중요한 글씨를 가리지 않게 해 줘. 위치를 확신할 수 없는 곳에는 넣지 마. 토큰을 아끼려고 화면 이미지는 "누르세요·클릭·선택·열어"처럼 위치가 필요한 말이 나온 시각에서만 가로 640px 이하로 줄여 보고(여러 장은 한 장에 모아서), 영상 한 편에 전체 20장을 넘기지 마. 확대와 체크는 이미지 없이 말의 타이밍만으로 넣어도 돼. 도형과 확대 만드는 법은 "편집파일_만드는법.txt"의 "강의·화면 녹화용 효과"에 있어. 끝나면 어떤 시각에 어떤 강조를 몇 개 넣었는지 알려 줘.' : '');
       const SPLIT_RULE = { fast: ' 자막은 "빠른 자막"으로 나눠 줘: 무조건 한 줄, 조사·어미 뒤에서 바로 끊어 1~2어절씩(공백 포함 8자 이내), 한 컷이 0.5~1초가 되게 톡톡 끊어 줘. 꾸미는 말과 조사 없는 말(예: "아침", "물 한")은 뒤 말과 붙여 줘. 예) 아침 공복에 / 따뜻한 / 물 한 잔을 / 마시면 / 혈액순환이 / 활발해지고 / 하루가 / 정말 / 가뿐해집니다. 자막 항목마다 "one": true 를 넣어 줘.', slow: ' 자막은 "느린 자막"으로 나눠 줘: 무조건 한 줄, 연결어미·종결어미에서 끊어 뜻이 끝나는 구나 짧은 절 단위로(공백 포함 8~13자, 뜻이 찢어지지 않게 최대 14자까지), 한 컷이 2초 이상 보이게 해 줘. 너무 길면 조사 뒤에서 나누고, 꾸미는 말(예: "따뜻한") 뒤에서는 끊지 마. 예) 아침 공복에 / 따뜻한 물 한 잔을 마시면 / 혈액순환이 활발해지고 / 하루가 정말 가뿐해집니다. 자막 항목마다 "one": true 를 넣어 줘.' };
       const GFILE = { tips: '생활꿀팁', docu: '다큐쇼핑', product: '상품소개', aigen: 'AI생성영상', overseas: '해외영상요약', lecture: '강의편집' }, gName = (GENRES.find((g) => g[0] === settings.genre) || [0, '📚 강의 편집'])[1].replace(/^\S+\s/, '');
-      const MODE_RULE = { auto: '', step: ' 기획, 대본, 컷 계획을 만들 때마다 먼저 보여 주고 내가 좋다고 하면 다음 단계로 넘어가 줘.', edit: ' 대본을 새로 쓰거나 내레이션을 만들지 말고, 폴더에 있는 영상과 음성만으로 편집해 줘.', script: ' 이번에는 .dsp 를 만들지 말고 대본만 써서 "결과" 폴더에 "대본.txt"로 저장해 줘.', prompt: ' 이번에는 .dsp 를 만들지 말고, 장면별 이미지·영상 생성 프롬프트만 써서 "결과" 폴더에 "프롬프트.txt"로 저장해 줘.' };
+      const MODE_RULE = { auto: '', step: ' 기획, 대본, 컷 계획을 만들 때마다 먼저 보여 주고 내가 좋다고 하면 다음 단계로 넘어가 줘.', text: ' 이번에는 .dsp 를 만들지 말고 글만 써 줘: 장르에 맞게 대본은 "결과" 폴더에 "대본.txt"로, AI 생성 영상이면 장면별 이미지·영상 생성 프롬프트를 "결과" 폴더에 "프롬프트.txt"로 저장해 줘.' };
       const GENRE_RULE = settings.genre ? ` 이 영상은 "${gName}" 영상이야. 폴더 안 "단동샘스킬/장르/${GFILE[settings.genre]}.md"를 읽고 그 규칙대로 만들어 줘.` : '';
       const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
@@ -2236,7 +2240,9 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       };
       if (!AI[ai]) ai = 'codex';
       Rt.append(E('div', 'asub', 'AI에게 보낼 말'));
-      const tabs = E('div', 'chips aitabs'); Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
+      const tabs = E('div', 'chips aitabs');   // 주로 쓰는 AI 하나만 보이고, 누르면 4개가 펼쳐져요
+      if (!aiOpen) { const t = E('button', 'chip on', AI[ai].name + ' ▾'); t.title = '다른 AI 고르기'; t.onclick = () => { aiOpen = true; draw(); }; tabs.append(t); }
+      else Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; aiOpen = false; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
       Rt.append(tabs, E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt)));
       const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
       if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }
