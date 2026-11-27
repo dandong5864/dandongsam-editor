@@ -1431,7 +1431,7 @@ async function handleMg(req, res, p, u) {
     const r = mgRuns[u.searchParams.get('id')]; if (!r) { req.resume(); return json(res, 400, { error: '영상 만들기가 끝났거나 없어요' }); }
     r.at = Date.now();
     try {
-      for await (const c of req) { if (r.dead) break; if (!r.proc.stdin.write(c)) await new Promise((ok) => { r.proc.stdin.once('drain', ok); r.proc.once('close', ok); }); }
+      for await (const c of req) { if (r.dead) break; if (!r.proc.stdin.write(c)) await new Promise((ok) => { const go = () => { r.proc.stdin.off('drain', go); r.proc.off('close', go); ok(); }; r.proc.stdin.once('drain', go); r.proc.once('close', go); }); }
     } catch (e) {}
     return json(res, r.dead ? 500 : 200, r.dead ? { error: '영상 만들기에 실패했어요' + (r.err ? ': ' + r.err.slice(-300) : '') } : { ok: true });
   }

@@ -12,6 +12,15 @@ STYLES = {'howto', 'lineicon', 'newsshorts', 'pptpen', 'cardnews', 'broadcast'}
 PER_MIN = {'low': (1, 2), 'mid': (2, 3), 'high': (4, 5)}
 
 
+MG_KEYS = ('type', 'tpl', 'style', 'title', 'items', 'at', 'text', 'value', 'label', 'from', 'left', 'right', 'win', 'clear', 'html')
+def mg_lift(x, is_clip=False):   # 편집기처럼 mg 묶음 없이 바로 적은 것({"kind":"mg","type":"steps",...})도 알아들어요
+    if not isinstance(x, dict) or isinstance(x.get('mg'), dict): return
+    if isinstance(x.get('mg'), str): x['mg'] = {'html': x['mg']} if x['mg'].lower().endswith(('.html', '.htm')) else {'type': x['mg']}; return
+    if x.get('kind') in ('mg', 'motion') or (is_clip and x.get('type') == 'mg'):
+        if not is_clip: x['kind'] = 'mg'
+        x['mg'] = {k: x[k] for k in MG_KEYS if k in x and not (is_clip and k == 'type' and x[k] == 'mg')}
+
+
 def plain(s): return str(s or '').replace('[', '').replace(']', '').strip()
 
 
@@ -27,6 +36,8 @@ def main():
         try: motion = (json.load(open(sp, encoding='utf-8-sig')) or {}).get('motion')
         except Exception: warn.append('편집설정.json 을 읽지 못했어요')
     clips, texts = d.get('clips') or [], d.get('texts') or []
+    for c in clips: mg_lift(c, True)
+    for x in texts: mg_lift(x)
     items = []   # (시작, 끝, 어디, id, mg)
     t = 0.0
     for c in clips:

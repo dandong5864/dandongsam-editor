@@ -10,6 +10,15 @@ FONTS = {'Cafe24 Ssurround', 'Cafe24 Dangdanghae', 'Cafe24 Danjunghae', 'Cafe24 
          'Ownglyph yuntaeng Regular', 'insungit Cutelively jisu', 'KCC-Chassam', 'Single Day',
          'NanumMyeongjo', 'NanumMyeongjo Bold', 'NanumMyeongjo ExtraBold', 'Black Han Sans', 'Do Hyeon'}
 
+
+MG_KEYS = ('type', 'tpl', 'style', 'title', 'items', 'at', 'text', 'value', 'label', 'from', 'left', 'right', 'win', 'clear', 'html')
+def mg_lift(x, is_clip=False):   # 편집기처럼 mg 묶음 없이 바로 적은 것({"kind":"mg","type":"steps",...})도 알아들어요
+    if not isinstance(x, dict) or isinstance(x.get('mg'), dict): return
+    if isinstance(x.get('mg'), str): x['mg'] = {'html': x['mg']} if x['mg'].lower().endswith(('.html', '.htm')) else {'type': x['mg']}; return
+    if x.get('kind') in ('mg', 'motion') or (is_clip and x.get('type') == 'mg'):
+        if not is_clip: x['kind'] = 'mg'
+        x['mg'] = {k: x[k] for k in MG_KEYS if k in x and not (is_clip and k == 'type' and x[k] == 'mg')}
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('dsp'); ap.add_argument('--folder'); ap.add_argument('--settings'); a = ap.parse_args()
     err, warn = [], []
@@ -40,6 +49,8 @@ def main():
             err.append(f'media {k}: 폴더에 "{nm}" 파일이 없어요' + (f' (대소문자만 다른 파일: {near[0]})' if near else ' (이름·확장자·공백·괄호까지 똑같아야 해요)')); continue
         try: inf = info(p); dur[k] = inf['duration']; vert[k] = bool(inf.get('ratio') and inf['ratio'] < 1)
         except Exception as e: err.append(f'media {k}: 열 수 없어요 ({e})')
+    for c in clips: mg_lift(c, True)
+    for x in texts: mg_lift(x)
     for x in clips:   # 모션그래픽 조각(mg)은 편집기가 영상으로 만들어요 → 길이(dur)만 확인
         if isinstance(x.get('mg'), dict):
             if not float(x.get('dur', 0) or 0) > 0: err.append(f"{x.get('id')}: 모션그래픽 조각에 dur(초)가 없어요")
