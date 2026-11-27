@@ -26,6 +26,9 @@ def main():
     words = []
     for sg in W['segments']:
         for w in sg['words']:
+            # 받아 적기는 쉰 뒤 첫 단어의 시작을 쉬는 동안으로 일찍 잡을 때가 있어요 → 글자 수에 비해 너무 긴 단어는 시작을 끝 쪽으로 당겨요
+            n = len(re.sub(r'[^\w]', '', w['w'])); mx = 0.3 + 0.2 * max(1, n)
+            if w['e'] - w['s'] > mx: w = dict(w, s=w['e'] - mx)
             for p in P:
                 if p['in'] - 1e-3 <= w['s'] < p['out'] - 1e-3:
                     sp = float(p.get('speed') or 1) or 1; pe = p['start'] + (p['out'] - p['in']) / sp

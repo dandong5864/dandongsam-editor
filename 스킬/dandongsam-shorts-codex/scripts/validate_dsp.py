@@ -65,6 +65,12 @@ def main():
     if oz: warn.append(f'확대(zoom) {len(oz)}곳이 겹쳐요 (예: {oz[0][0]} 과 {oz[0][1]})')
     short = [t['id'] for t in texts if t.get('kind') == 'sub' and float(t.get('end', 0)) - float(t.get('start', 0)) < 0.3]
     if short: warn.append(f'0.3초보다 짧은 자막 {len(short)}줄 (예: {short[0]})')
+    import re as _re; from difflib import SequenceMatcher as _SM
+    SB = sorted((t for t in texts if t.get('kind') == 'sub'), key=lambda t: float(t.get('start', 0)))
+    nm = [_re.sub(r'[^\w]', '', str(t.get('text', ''))) for t in SB]
+    dup = [(SB[i]['id'], SB[j]['id']) for i in range(len(SB)) for j in range(i + 1, min(i + 3, len(SB)))
+           if len(nm[i]) >= 4 and len(nm[j]) >= 4 and (nm[i] == nm[j] or _SM(None, nm[i], nm[j]).ratio() >= 0.8)]
+    if dup: warn.append(f'같은 말이 반복된 자막 {len(dup)}곳 (예: {dup[0][0]} 과 {dup[0][1]}) → 다시 말한 앞부분을 잘랐는지 확인 (repeats.py --pieces)')
     if audio and any(not c.get('mute') and c.get('vol', 100) > 0 for c in clips): warn.append('더빙이 있는데 영상 조각의 소리가 켜져 있어요 (mute: true, vol: 0 권장)')
     if d.get('canvas') == '16:9' and (settings or {}).get('portrait', 'rot90') != 'keep':
         miss = [c['id'] for c in clips if vert.get(c.get('mediaId')) and int(c.get('rot') or 0) % 360 not in (90, 270)]

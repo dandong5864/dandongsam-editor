@@ -240,17 +240,27 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 function audioTick() {
+  // 화면 시계(S.t)는 영상을 따라가요. 컷이 바뀌며 영상이 다음 장면을 찾는 동안(seek·버퍼링)엔 시계가 멈추니, 더빙도 잠깐 멈춰 자막과 어긋나지 않게 해요
+  const hold = playing && (switching || (cur && !cur.rev && (video.seeking || video.readyState < 3)));
   for (const a of S.audio) {
     const m = S.media[a.mediaId]; if (!m) continue;
     const en = a.start + (a.out - a.in);
     let el = aEls[a.id];
     if (S.t >= a.start && S.t < en) {
-      if (!el) { el = aEls[a.id] = new Audio(mediaUrl(a.mediaId)); }
-      const want = a.in + (S.t - a.start);
+      if (!el) { el = aEls[a.id] = new Audio(mediaUrl(a.mediaId)); el.preload = 'auto'; }
+      const want = a.in + (S.t - a.start), d = el.currentTime - want;
       el.volume = tf('a').m ? 0 : clamp(a.vol / 100, 0, 1);
-      if (el.paused) { el.currentTime = want; el.play().catch(() => {}); }
-      else if (Math.abs(el.currentTime - want) > 0.35) el.currentTime = want;
-    } else if (el && !el.paused) el.pause();
+      if (hold || !playing) { if (!el.paused) el.pause(); continue; }
+      if (el.paused) { if (Math.abs(d) > 0.03) el.currentTime = want; el.playbackRate = 1; el.play().catch(() => {}); }
+      else if (Math.abs(d) > 0.15 || el.seeking) { if (!el.seeking) el.currentTime = want; el.playbackRate = 1; }   // 많이 어긋나면 바로 맞추고
+      else el.playbackRate = Math.abs(d) < 0.02 ? 1 : clamp(1 - d * 2, 0.92, 1.08);                                // 조금 어긋나면 빠르기를 살짝 바꿔 소리 끊김 없이 따라가요
+    } else {
+      if (el && !el.paused) el.pause();
+      if (playing && S.t < a.start && a.start - S.t < 1.5) {   // 곧 나올 소리는 미리 불러서 시작 자리에 세워 둬요 (늦게 시작하지 않게)
+        if (!el) { el = aEls[a.id] = new Audio(mediaUrl(a.mediaId)); el.preload = 'auto'; }
+        if (!el.seeking && Math.abs(el.currentTime - a.in) > 0.05) el.currentTime = a.in;
+      }
+    }
   }
   for (const id of Object.keys(aEls)) if (!S.audio.some((a) => a.id === id)) { aEls[id].pause(); aEls[id].removeAttribute('src'); delete aEls[id]; }   // 지운 소리는 바로 멈추고 정리해요
 }
