@@ -2058,7 +2058,8 @@ function fitTplMid() {   // 쇼츠 템플릿이 있으면 영상 위·아래 끝
     if (tp.fitMid) { c.fit = 'cover'; n++; return; }
     const odd = ((((+c.rot || 0) % 360) + 360) % 360) % 180 !== 0, rw = odd ? m.height : m.width, rh = odd ? m.width : m.height;
     const base = Math.min(W / rw, H / rh), want = Math.max(W / rw, (midH + 2 * TPL_OVERLAP * H) / rh), sc = Math.round(want / base * 100);
-    if (sc > 100) { c.scale = Math.min(400, sc); n++; }
+    const top = +tp.top || 0, bot = +tp.bottom || 0, shift = Math.round(((top + 100 - bot) / 2 - 50) * 10) / 10;   // 위·아래 띠 두께가 다르면(상단형·내 템플릿) 가운데 칸 한가운데로 옮겨요
+    if (sc > 100 || shift) { if (sc > 100) c.scale = Math.min(400, sc); if (shift && !+c.y) c.y = shift; n++; }
   });
   return n;
 }
