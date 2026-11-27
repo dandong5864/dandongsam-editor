@@ -2057,9 +2057,16 @@ function fitTplMid() {   // 쇼츠 템플릿이 있으면 영상 위·아래 끝
     const m = S.media[c.mediaId]; if (!m || !m.width || !m.height || c.fit === 'cover' || (c.scale != null && +c.scale !== 100)) return;
     if (tp.fitMid) { c.fit = 'cover'; n++; return; }
     const odd = ((((+c.rot || 0) % 360) + 360) % 360) % 180 !== 0, rw = odd ? m.height : m.width, rh = odd ? m.width : m.height;
-    const base = Math.min(W / rw, H / rh), want = Math.max(W / rw, (midH + 2 * TPL_OVERLAP * H) / rh), sc = Math.round(want / base * 100);
-    const top = +tp.top || 0, bot = +tp.bottom || 0, shift = Math.round(((top + 100 - bot) / 2 - 50) * 10) / 10;   // 위·아래 띠 두께가 다르면(상단형·내 템플릿) 가운데 칸 한가운데로 옮겨요
-    if (sc > 100 || shift) { if (sc > 100) c.scale = Math.min(400, sc); if (shift && !+c.y) c.y = shift; n++; }
+    const base = Math.min(W / rw, H / rh), top = +tp.top || 0, bot = +tp.bottom || 0, ov = TPL_OVERLAP * 100, r1 = (x) => Math.round(x * 10) / 10;
+    if (top > 0 && bot > 0) {   // 위·아래 띠가 다 있으면: 띠 사이를 채우고 양쪽 띠에 살짝 겹치게, 칸 한가운데로
+      const want = Math.max(W / rw, (midH + 2 * TPL_OVERLAP * H) / rh), sc = Math.round(want / base * 100), shift = r1((top + 100 - bot) / 2 - 50);
+      if (sc > 100 || shift) { if (sc > 100) c.scale = Math.min(400, sc); if (shift && !+c.y) c.y = shift; n++; }
+      return;
+    }
+    if (+c.y || (!top && !bot)) return;   // 띠가 한쪽만 있으면(상단형 등): 키우지 않고 그 띠 바로 밑(위)에 살짝 겹치게 붙여요
+    const hv = rh * base / H * 100;   // 영상 높이(화면 높이 대비 %)
+    if (top > 0 && 50 - hv / 2 > top - ov) { c.y = r1(top - ov + hv / 2 - 50); n++; }
+    else if (bot > 0 && 50 + hv / 2 < 100 - bot + ov) { c.y = r1(100 - bot + ov - hv / 2 - 50); n++; }
   });
   return n;
 }
