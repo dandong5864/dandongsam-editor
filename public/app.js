@@ -2041,7 +2041,7 @@ function relinkDialog(miss) {
   });
 }
 function loadProjectData(d) {
-  d = normalizeProject(d);
+  const fitTpl = !!(d && d.__fitTpl); d = normalizeProject(d); d.__fitTpl = fitTpl;
   const mp = d.media || {}, map = {};   // 다른 컴퓨터/폴더에서 온 파일은 이름·크기가 같은 파일로 연결
   Object.keys(mp).forEach((id) => { if (S.media[id]) { map[id] = id; return; } const f = Object.values(S.media).find((m) => m.name === mp[id].name && (!mp[id].size || m.size === mp[id].size)) || Object.values(S.media).find((m) => m.name === mp[id].name) || Object.values(S.media).find((m) => lk(m.name) && lk(m.name) === lk(mp[id].name)); if (f) map[id] = f.id; });
   const usedIds = new Set([...(d.clips || []), ...(d.audio || [])].map((c) => c.mediaId));
@@ -2049,9 +2049,22 @@ function loadProjectData(d) {
   if (lost.length && !d.__relinked) { relinkDialog(lost).then((got) => { d.__relinked = true; if (got) Object.assign(map, got); finishLoad(d, map); }); return; }
   finishLoad(d, map);
 }
+function fitTplMid() {   // 쇼츠 템플릿이 있으면 영상이 위·아래 띠 사이(가운데 칸)를 꽉 채우게 맞춰요. 일부러 크기를 바꾼 조각은 그대로 둬요
+  const tp = tplOn(); if (!tp) return 0; let n = 0;
+  const W = 1, H = 1 / canvasRatio(), midH = H * Math.max(0.05, 1 - ((+tp.top || 0) + (+tp.bottom || 0)) / 100);
+  S.clips.forEach((c) => {
+    const m = S.media[c.mediaId]; if (!m || !m.width || !m.height || c.fit === 'cover' || (c.scale != null && +c.scale !== 100)) return;
+    if (tp.fitMid) { c.fit = 'cover'; n++; return; }
+    const odd = ((((+c.rot || 0) % 360) + 360) % 360) % 180 !== 0, rw = odd ? m.height : m.width, rh = odd ? m.width : m.height;
+    const base = Math.min(W / rw, H / rh), want = Math.max(W / rw, midH / rh), sc = Math.round(want / base * 100);
+    if (sc > 100) { c.scale = Math.min(400, sc); n++; }
+  });
+  return n;
+}
 function finishLoad(d, map) {
   let miss = 0; const fix = (l) => (l || []).filter((c) => { const t = map[c.mediaId] || (S.media[c.mediaId] ? c.mediaId : null); if (!t) { miss++; return false; } c.mediaId = t; return true; });
   push(); S.clips = fix(d.clips); S.audio = fix(d.audio); S.pm = new Set([...Object.values(map), ...S.clips.map((c) => c.mediaId), ...S.audio.map((c) => c.mediaId)].filter((id) => S.media[id])); S.texts = d.texts || []; S.bg = nb(d.bg); S.tpl = d.tpl || null; S.canvas = d.canvas || 'original'; S.sel = null; S.t = 0;
+  if (d.__fitTpl) fitTplMid();
   changed(true); fitAll(); if (S.canvas) { const sc = $('#sel-canvas'); if (sc) sc.value = S.canvas; }
   toast(miss ? `열었어요. 단, 원본 파일 ${miss}개를 찾지 못해 빠졌어요 (미디어 탭에서 다시 가져와 주세요)` : '동영상을 열었어요', null, miss ? 8000 : 3500);
 }
@@ -2125,7 +2138,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     const r = await post('/api/auto/open', { file: it.file });
     if (r.error) return toast(r.error, null, 6000);
     (r.media || []).forEach((m) => { S.media[m.id] = m; });
-    closeModal(); curProj = null; loadProjectData(r.data);
+    closeModal(); curProj = null; r.data.__fitTpl = true; loadProjectData(r.data);   // AI가 만든 결과: 쇼츠 템플릿 가운데 칸에 맞춰 열어요
     if (r.missing && r.missing.length) toast(`폴더에서 ${r.missing.length}개를 찾지 못했어요: ${r.missing.join(', ')}`, null, 9000);
     else if (r.linked && r.linked.length) toast(`이름이 달라도 ${r.linked.length}개를 알아서 이어 붙였어요`, null, 5000);
   }
