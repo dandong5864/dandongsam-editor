@@ -831,6 +831,7 @@ const SKILL_SRC = path.join(ROOT, '스킬', 'dandongsam-shorts-codex');   // 편
 function copyDir(src, dst) {
   fs.mkdirSync(dst, { recursive: true });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    if (e.name === '__pycache__' || e.name.endsWith('.pyc')) continue;   // 파이썬 임시 파일은 작업 폴더에 복사하지 않아요
     const a = path.join(src, e.name), b = path.join(dst, e.name);
     if (e.isDirectory()) copyDir(a, b);
     else if (e.isFile()) { try { const sa = fs.statSync(a), sb = fs.statSync(b); if (sa.size === sb.size && sb.mtimeMs >= sa.mtimeMs) continue; } catch (er) {} try { fs.copyFileSync(a, b); } catch (er) {} }

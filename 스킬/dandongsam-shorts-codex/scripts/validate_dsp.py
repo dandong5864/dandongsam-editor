@@ -22,8 +22,10 @@ def main():
     if not a.folder and os.path.basename(folder) == '결과': folder = os.path.dirname(folder)
     settings = None
     sp = a.settings or os.path.join(folder, '편집설정.json')
-    if os.path.exists(sp): settings = json.load(open(sp, encoding='utf-8'))
+    if os.path.exists(sp): settings = json.load(open(sp, encoding='utf-8-sig'))
     media, clips, audio, texts = d.get('media') or {}, d.get('clips') or [], d.get('audio') or [], d.get('texts') or []
+    if isinstance(media, list): media = {(m.get('id') if isinstance(m, dict) else None) or f'#{i}': m for i, m in enumerate(media)}   # 목록 모양도 받아요
+    fonts = set(FONTS) | {(settings or {}).get(k, {}).get('font') for k in ('subtitle', 'title') if isinstance((settings or {}).get(k), dict)}   # 사용자가 고른 글꼴도 인정
     ids = [x.get('id') for x in clips + audio + texts]
     dup = {i for i in ids if ids.count(i) > 1}
     if dup: err.append(f'id 중복: {sorted(map(str, dup))}')
@@ -46,7 +48,7 @@ def main():
         if k in dur and o > dur[k] + 0.05: err.append(f"{x.get('id')}: out {o} 이 원본 길이 {dur[k]} 보다 길어요")
     for x in texts:
         if not float(x.get('start', 0)) < float(x.get('end', 0)): err.append(f"{x.get('id')}: start < end 이어야 해요")
-        if x.get('font') not in FONTS: warn.append(f"{x.get('id')}: 글꼴 '{x.get('font')}' 은 목록에 없어요")
+        if x.get('kind') in ('sub', 'text') and x.get('font') not in fonts: warn.append(f"{x.get('id')}: 글꼴 '{x.get('font')}' 은 목록에 없어요")
     if d.get('canvas') not in ('16:9', '9:16', 'original', '1:1', '4:3'): err.append(f"canvas 값이 이상해요: {d.get('canvas')}")
     vt = sum((float(c['out']) - float(c['in'])) / (float(c.get('speed', 1)) or 1) for c in clips if 'out' in c and 'in' in c)
     ae = max([float(x.get('start', 0)) + float(x['out']) - float(x['in']) for x in audio if 'out' in x and 'in' in x] or [0])
@@ -54,6 +56,15 @@ def main():
     print(f'영상 조각 합계 {vt:.2f}초 · 더빙 끝 {ae:.2f}초 · 마지막 자막 끝 {se:.2f}초 · 영상 {len(clips)}컷 · 더빙 {len(audio)}조각 · 자막 {sum(1 for t in texts if t.get("kind") == "sub")}줄')
     if audio and abs(vt - ae) > 0.3: warn.append(f'영상 합계({vt:.2f})와 더빙 끝({ae:.2f})이 달라요')
     if se > max(vt, ae) + 0.3: warn.append('자막이 영상보다 길어요')
+    def overlaps(kind, gap=0.0):   # 같은 종류끼리 시간이 겹치는 곳
+        L = sorted((float(t.get('start', 0)), float(t.get('end', 0)), t.get('id')) for t in texts if t.get('kind') == kind and int(t.get('lane') or 0) == 0)
+        return [(L[i][2], L[i + 1][2]) for i in range(len(L) - 1) if L[i + 1][0] < L[i][1] - gap]
+    ov = overlaps('sub', 0.05)
+    if ov: warn.append(f'자막 {len(ov)}곳이 시간이 겹쳐요 (예: {ov[0][0]} 과 {ov[0][1]})')
+    oz = overlaps('zoom')
+    if oz: warn.append(f'확대(zoom) {len(oz)}곳이 겹쳐요 (예: {oz[0][0]} 과 {oz[0][1]})')
+    short = [t['id'] for t in texts if t.get('kind') == 'sub' and float(t.get('end', 0)) - float(t.get('start', 0)) < 0.3]
+    if short: warn.append(f'0.3초보다 짧은 자막 {len(short)}줄 (예: {short[0]})')
     if audio and any(not c.get('mute') and c.get('vol', 100) > 0 for c in clips): warn.append('더빙이 있는데 영상 조각의 소리가 켜져 있어요 (mute: true, vol: 0 권장)')
     if d.get('canvas') == '16:9' and (settings or {}).get('portrait', 'rot90') != 'keep':
         miss = [c['id'] for c in clips if vert.get(c.get('mediaId')) and int(c.get('rot') or 0) % 360 not in (90, 270)]

@@ -1,25 +1,50 @@
 # -*- coding: utf-8 -*-
 """한국어 음성을 단어별 시각과 함께 받아 적어요 (Whisper large-v3-turbo, 내 컴퓨터에서 실행).
-사용: python transcribe.py <영상/오디오> --out words.json [--model large-v3-turbo] [--vad]
+사용: python transcribe.py <영상/오디오> --out words.json
+      python transcribe.py <파일1> <파일2> ... --out-dir "%TEMP%\\words"   (여러 파일: 모델을 한 번만 불러와요 → <파일이름>.words.json)
+옵션: --model large-v3-turbo  --no-vad(말 없는 구간 거르기 끄기)  --force(이미 받아 적은 파일도 다시)
+같은 파일을 이미 받아 적었으면(크기·수정 시각이 같으면) 건너뛰어요.
 처음 한 번은 모델(약 1.6GB)을 내려받아요. 설치: python -m pip install faster-whisper"""
 import sys, os, json, argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common  # noqa: F401  (UTF-8 출력 설정)
 
+def stamp(p):
+    st = os.stat(p); return {'size': st.st_size, 'mtime': int(st.st_mtime)}
+
+def done_before(src, out):
+    try:
+        j = json.load(open(out, encoding='utf-8'))
+        return j.get('src') == stamp(src)
+    except Exception: return False
+
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('file'); ap.add_argument('--out', default='words.json')
-    ap.add_argument('--model', default='large-v3-turbo'); ap.add_argument('--vad', action='store_true'); ap.add_argument('--lang', default='ko')
+    ap = argparse.ArgumentParser(); ap.add_argument('files', nargs='+'); ap.add_argument('--out'); ap.add_argument('--out-dir')
+    ap.add_argument('--model', default='large-v3-turbo'); ap.add_argument('--lang', default='ko')
+    ap.add_argument('--vad', action='store_true', help='(예전 옵션, 이제 기본으로 켜져 있어요)'); ap.add_argument('--no-vad', action='store_true')
+    ap.add_argument('--force', action='store_true')
     a = ap.parse_args()
+    if len(a.files) > 1 and not a.out_dir: sys.exit('[안내] 파일이 여러 개면 --out-dir 로 저장할 폴더를 정해 주세요.')
+    jobs = []
+    for f in a.files:
+        out = a.out if (len(a.files) == 1 and a.out) else os.path.join(a.out_dir or '.', os.path.basename(f) + '.words.json')
+        if not a.force and done_before(f, out): print(f'이미 받아 적었어요 → {out} (다시 하려면 --force)'); continue
+        jobs.append((f, out))
+    if not jobs: return
     try: from faster_whisper import WhisperModel
     except ImportError: sys.exit("[필요] faster-whisper 가 없어요. 'python -m pip install faster-whisper' 를 실행한 뒤 다시 해 주세요.")
     try: model = WhisperModel(a.model, device='auto', compute_type='int8')
     except Exception as e: sys.exit(f"[실패] 모델을 불러오지 못했어요 ({e}). 인터넷 연결을 확인하거나 --model small 로 해 보세요.")
-    segs, info = model.transcribe(a.file, language=a.lang, word_timestamps=True, vad_filter=a.vad, condition_on_previous_text=False)
-    out = {'file': os.path.basename(a.file), 'duration': round(info.duration, 3), 'segments': []}
-    for s in segs:
-        out['segments'].append({'start': round(s.start, 3), 'end': round(s.end, 3), 'text': s.text.strip(),
-                                'words': [{'w': w.word, 's': round(w.start, 3), 'e': round(w.end, 3)} for w in (s.words or [])]})
-        print(f"{s.start:7.2f}-{s.end:7.2f}  {s.text.strip()}", flush=True)
-    with open(a.out, 'w', encoding='utf-8') as f: json.dump(out, f, ensure_ascii=False, indent=1)
-    print(f"\n저장: {a.out}  (구간 {len(out['segments'])}개)")
+    for f, outp in jobs:
+        # 말 없는 구간은 걸러요(기본): 조용한 곳에서 없는 말을 지어내는 것을 막아요. 시각은 원본 기준 그대로예요.
+        segs, info = model.transcribe(f, language=a.lang, word_timestamps=True, vad_filter=not a.no_vad, condition_on_previous_text=False)
+        out = {'file': os.path.basename(f), 'src': stamp(f), 'duration': round(info.duration, 3), 'segments': []}
+        print(f'== {os.path.basename(f)}', flush=True)
+        for s in segs:
+            out['segments'].append({'start': round(s.start, 3), 'end': round(s.end, 3), 'text': s.text.strip(),
+                                    'words': [{'w': w.word, 's': round(w.start, 3), 'e': round(w.end, 3)} for w in (s.words or [])]})
+            print(f"{s.start:7.2f}-{s.end:7.2f}  {s.text.strip()}", flush=True)
+        d = os.path.dirname(os.path.abspath(outp)); os.makedirs(d, exist_ok=True)
+        with open(outp, 'w', encoding='utf-8') as fo: json.dump(out, fo, ensure_ascii=False, indent=1)
+        print(f"저장: {outp}  (구간 {len(out['segments'])}개)\n")
 main()
