@@ -55,16 +55,49 @@ function findDownloads() {
 }
 const writable = (d) => { try { fs.mkdirSync(d, { recursive: true }); const t = path.join(d, '.dds_write_test'); fs.writeFileSync(t, ''); fs.unlinkSync(t); return true; } catch (e) { return false; } };
 const hasFiles = (d) => { try { return fs.readdirSync(d).some((n) => !n.startsWith('.')); } catch (e) { return false; } };
+// 윈도우 '저장 공간 센스'가 다운로드 폴더의 오래된 파일을 지우게 켜져 있는지 (켜져 있으면 지우는 날짜 수, 아니면 0)
+function storageSenseDays() {
+  if (process.platform !== 'win32') return 0;
+  try {
+    const o = require('child_process').execFileSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+    const v = (k) => { const m = new RegExp('^\\s*' + k + '\\s+REG_DWORD\\s+0x([0-9a-f]+)', 'im').exec(o); return m ? parseInt(m[1], 16) : 0; };
+    return v('01') ? v('512') : 0;
+  } catch (e) { return 0; }
+}
+function findVideos() {
+  const def = path.join(os.homedir(), 'Videos');
+  try {
+    const o = require('child_process').execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "[Console]::OutputEncoding=[Text.Encoding]::UTF8; [Environment]::GetFolderPath('MyVideos')"], { encoding: 'utf8', windowsHide: true, timeout: 8000 }).trim();
+    if (o && path.isAbsolute(o) && fs.existsSync(o)) return o;
+  } catch (e) {}
+  return def;
+}
 const USER_BASE = (() => {
   const sf = path.join(WS, 'settings.json'); let st = {}; try { st = JSON.parse(fs.readFileSync(sf, 'utf8')); } catch (e) {}
   if (st.userBase && fs.existsSync(path.dirname(st.userBase))) return st.userBase;
   let dl = findDownloads(); if (!writable(dl)) dl = os.homedir();
+  if (storageSenseDays() > 0) { const vd = findVideos(); if (writable(vd)) dl = vd; }   // 다운로드를 자동으로 비우는 PC면 처음부터 '동영상' 폴더에 둬요
   const b = path.join(dl, '단동샘 편집기'); st.userBase = b;
   try { fs.mkdirSync(WS, { recursive: true }); fs.writeFileSync(sf, JSON.stringify(st)); } catch (e) {}
   return b;
 })();
 // 예전 버전에서 프로그램 폴더 안에 파일을 만들어 둔 사람은 그 자리를 그대로 써요 (찾던 곳이 갑자기 바뀌지 않게)
 const userDir = (name) => { const old = path.join(ROOT, name); return hasFiles(old) && writable(old) ? old : path.join(USER_BASE, name); };
+// 이미 다운로드 폴더를 쓰는 PC에서 저장 공간 센스가 켜져 있으면, 편집기를 켤 때마다 파일을 '열어 본 것'으로 표시해서 지워지지 않게 해요
+// (저장 공간 센스는 오래 안 연 파일을 지워요. 수정한 날짜는 그대로 둬요)
+function keepFresh(list) {
+  if (process.platform !== 'win32') return;
+  setTimeout(async () => {
+    try {
+      const dl = findDownloadsCached(), dirs = [...new Set(list().filter((d) => d && inside(d, dl) && path.resolve(d) !== path.resolve(dl)).map((d) => path.resolve(d)))];
+      if (!dirs.length || storageSenseDays() <= 0) return;
+      const now = new Date(), fp = fs.promises; let n = 0;
+      const walk = async (d, depth) => { if (depth > 6 || n > 20000) return; let es; try { es = await fp.readdir(d, { withFileTypes: true }); } catch (e) { return; }
+        for (const e of es) { const f = path.join(d, e.name); if (e.isDirectory()) await walk(f, depth + 1); else if (e.isFile() && n++ < 20000) { try { const st = await fp.stat(f); await fp.utimes(f, now, st.mtime); } catch (x) {} } } };
+      for (const d of dirs.filter((d) => !dirs.some((o) => o !== d && inside(d, o)))) await walk(d, 0);
+    } catch (e) {}
+  }, 15000).unref();
+}
 const DIRS = {
   media: path.join(WS, 'media'),
   cache: path.join(WS, 'cache'),
@@ -1913,6 +1946,7 @@ server.on('error', (e) => {
   }
   else { console.error(e); process.exit(1); }
 });
+keepFresh(() => { const c = autoCfg(); return [USER_BASE, getOutDir(), c.root, ...c.extra]; });
 server.listen(PORT, '127.0.0.1', () => {
   for (const m of Object.values(media)) if (!m.lite && !m.preview && isHeavy(m)) makeLite(m.id, m.file, m);   // 예전에 가져온 큰 영상도 가벼운 사본을 만들어 둬요
   const url = `http://localhost:${PORT}`;
