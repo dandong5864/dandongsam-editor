@@ -1639,7 +1639,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/pickfile') {   // 작업 폴더의 결과 폴더를 연 상태로 파일 고르기
       const b = await readBody(req); const dir = path.resolve(String(b.path || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
       const R = path.join(dir, '결과'); fs.mkdirSync(R, { recursive: true });
-      const DL = path.join(os.homedir(), 'Downloads');   // ChatGPT 등 웹에서 받은 파일은 보통 '다운로드' 폴더에 있어요
+      const DL = findDownloadsCached();   // 윈도우가 알고 있는 실제 다운로드 위치. ChatGPT 등 웹에서 받은 파일은 보통 '다운로드' 폴더에 있어요
       const f = await pickFile(b.from === 'downloads' && fs.existsSync(DL) ? DL : R); if (f === null) return json(res, 200, { unsupported: true }); if (!f) return json(res, 200, { canceled: true });
       let j; try { j = parseDsp(fs.readFileSync(f, 'utf8')); } catch (e) { return json(res, 400, { error: '편집 파일(.dsp) 형식이 아니에요. AI가 만든 파일을 그대로 골라 주세요' }); }
       if (!j || typeof j !== 'object') return json(res, 400, { error: '편집 파일을 읽을 수 없어요' });

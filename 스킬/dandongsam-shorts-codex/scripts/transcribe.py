@@ -5,7 +5,7 @@
 옵션: --model large-v3-turbo  --no-vad(말 없는 구간 거르기 끄기)  --force(이미 받아 적은 파일도 다시)
 같은 파일을 이미 받아 적었으면(크기·수정 시각이 같으면) 건너뛰어요.
 단동샘 편집기에서 [🎤 받아 적기]를 눌러 두었으면(작업 폴더/받아적기/) 그것을 그대로 써요 (--force 로 새로 받아 적기).
-처음 한 번은 모델(약 1.6GB)을 내려받아요. 설치: python -m pip install faster-whisper"""
+처음 한 번은 모델(약 1.6GB)을 내려받아요. 설치: python -m pip install faster-whisper==1.2.1"""
 import sys, os, json, argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common  # noqa: F401  (UTF-8 출력 설정)
@@ -50,7 +50,7 @@ def main():
         jobs.append((f, out))
     if not jobs: return
     try: from faster_whisper import WhisperModel
-    except ImportError: sys.exit("[필요] faster-whisper 가 없어요. 'python -m pip install faster-whisper' 를 실행한 뒤 다시 해 주세요.")
+    except ImportError: sys.exit("[필요] faster-whisper 가 없어요. 'python -m pip install faster-whisper==1.2.1' 를 실행한 뒤 다시 해 주세요.")
     try: model = WhisperModel(a.model, device='auto', compute_type='int8')
     except Exception as e: sys.exit(f"[실패] 모델을 불러오지 못했어요 ({e}). 인터넷 연결을 확인하거나 --model small 로 해 보세요.")
     for f, outp in jobs:

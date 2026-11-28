@@ -6,7 +6,7 @@
   목소리: ko-KR-SunHiNeural(여자) ko-KR-InJoonNeural(남자) ko-KR-HyunsuMultilingualNeural(남자2)
 결과: 내레이션.mp3 (소리 파일 하나) + words.json (transcribe.py 와 같은 모양이라 make_texts.py 에 그대로 넣을 수 있어요)
 같은 대본·목소리·빠르기로 이미 만들었으면 건너뛰어요 (--force 로 다시).
-설치: python -m pip install -U edge-tts"""
+설치: python -m pip install edge-tts==7.3.1"""
 import sys, os, json, argparse, asyncio, hashlib, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common  # noqa: F401  (UTF-8 출력 설정)
@@ -51,7 +51,7 @@ def align(lines, bounds):
 
 async def speak(text, voice, rate, out_path):
     try: import edge_tts
-    except ImportError: sys.exit("[필요] edge-tts 가 없어요. 'python -m pip install -U edge-tts' 를 실행한 뒤 다시 해 주세요.")
+    except ImportError: sys.exit("[필요] edge-tts 가 없어요. 'python -m pip install edge-tts==7.3.1' 을 실행한 뒤 다시 해 주세요.")
     kw = {'rate': rate, 'boundary': 'WordBoundary'}
     px = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
     if px: kw['proxy'] = px

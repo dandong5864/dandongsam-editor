@@ -27,7 +27,7 @@ description: 내 컴퓨터의 작업 폴더에 있는 영상·내레이션을 �
 
 - `python --version`과 `python SKILL_DIR/scripts/ff.py ffmpeg -version`을 확인한다.
 - ffmpeg·ffprobe는 따로 설치하지 않는다: 편집기가 `SKILL_DIR/도구위치.json`에 편집기 안의 ffmpeg 위치를 적어 두고, 스크립트가 그것을 저절로 쓴다. 직접 ffmpeg 명령을 써야 하면 `ffmpeg` 대신 `python SKILL_DIR/scripts/ff.py ffmpeg ...`(ffprobe도 같음)로 실행한다. 이것도 안 될 때만(윈도우) `winget install Gyan.FFmpeg` 후 터미널을 새로 연다. 설치는 사용자에게 알리고 진행한다.
-- 음성 인식: 작업 폴더에 `받아적기/<파일 이름>.words.json`(편집기의 "🎤 받아 적기"로 만든 것)이 있으면 그대로 쓰니 설치가 필요 없다(transcribe.py가 저절로 가져온다). 없을 때만 `python -m pip install faster-whisper`. 첫 실행 때 모델(large-v3-turbo, 약 1.6GB)을 내려받아 시간이 걸린다.
+- 음성 인식: 작업 폴더에 `받아적기/<파일 이름>.words.json`(편집기의 "🎤 받아 적기"로 만든 것)이 있으면 그대로 쓰니 설치가 필요 없다(transcribe.py가 저절로 가져온다). 없을 때만 `python -m pip install faster-whisper==1.2.1`. 첫 실행 때 모델(large-v3-turbo, 약 1.6GB)을 내려받아 시간이 걸린다.
 
 ## 1. 폴더 파악
 
@@ -75,7 +75,7 @@ python SKILL_DIR/scripts/ff.py ffmpeg -y -i "<내레이션 원본>" -vn -af "hig
 초보는 직접 녹음하기 어려워서, 대본을 무료 AI 목소리(엣지 목소리)로 읽어 내레이션 하나를 만든다. 인터넷이 필요하다.
 
 1. 장르 규칙대로 대본을 쓰고 `결과/대본.txt`에 **한 줄에 한 문장**으로 저장한다. 숫자·단위는 읽는 대로 적어도 된다(예: "3개" 그대로 둬도 됨). 괄호·이모지·해시태그는 넣지 않는다.
-2. 내레이션을 만든다(처음 한 번 `python -m pip install -U edge-tts`):
+2. 내레이션을 만든다(처음 한 번 `python -m pip install edge-tts==7.3.1`):
 
 ```
 python SKILL_DIR/scripts/narrate.py "<작업 폴더>\결과\대본.txt" --settings "<작업 폴더>\편집설정.json" --out "<작업 폴더>\내레이션.mp3" --words "%TEMP%\narr.words.json"
