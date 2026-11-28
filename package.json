@@ -1,6 +1,6 @@
 {
   "name": "video-toolkit",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "private": true,
   "description": "쉬운 무료 로컬 영상 편집기",
   "main": "server.js",
