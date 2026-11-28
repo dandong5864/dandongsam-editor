@@ -626,3 +626,11 @@ body.resizing{user-select:none}body.resizing *{cursor:inherit!important}
 .mg-sw span{display:block;height:72px;border-radius:6px;background:#000 center/cover no-repeat}
 .mg-sw small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:700px){.mg-top{flex-direction:column}}
+
+/* 편집기 창: 위쪽 줄에 최소화·최대화·닫기 (홈 화면·작은 창이 떠 있어도 항상 보여요) */
+#win-btns{position:fixed;top:0;right:0;z-index:100000;display:flex}
+#win-btns[hidden]{display:none}
+#win-btns button{width:46px;height:100%;border:0;border-radius:0;background:transparent;padding:0;display:flex;align-items:center;justify-content:center;color:var(--text)}
+#win-btns button:hover{background:#ffffff1f}
+#win-btns #win-close:hover{background:#e81123;color:#fff}
+#win-btns svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1}

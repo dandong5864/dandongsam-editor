@@ -1435,6 +1435,8 @@ function revealPath(p) {
 function openApp(url) {
   if (process.env.NO_OPEN) return;
   if (process.platform === 'win32') {
+    const win = process.env.DDS_WINDOW;   // 실행 프로그램이 위쪽 회색 줄 없는 창을 띄울 수 있으면 그걸 써요
+    if (win && fs.existsSync(win)) { try { const c = spawn(win, ['--window', url], { detached: true, stdio: 'ignore' }); c.on('error', () => exec(`start "" msedge --app="${url}"`)); c.unref(); return; } catch (e) {} }
     exec(`start "" msedge --app="${url}"`, (e) => { if (e) exec(`start "" "${url}"`); });
   } else if (process.platform === 'darwin') {
     exec(`open -na "Google Chrome" --args --app="${url}" || open "${url}"`);

@@ -1937,6 +1937,25 @@ setInterval(ping, 5000); ping();
 addEventListener('focus', ping); document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
 addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } catch (e) {} });
 
+/* ============ 편집기 창 (위쪽 회색 줄 없이 한 줄로) ============ */
+(() => {
+  const wv = window.chrome && window.chrome.webview; if (!wv) return;   // 엣지 창으로 열렸을 땐 그대로
+  const top = $('#top'), box = $('#win-btns'); box.hidden = false;
+  const send = (m) => wv.postMessage(m), MAX = '<path d="M.5.5h9v9h-9z"/>', RESTORE = '<path d="M2.5.5h7v7M.5 2.5h7v7h-7z"/>';
+  $('#win-min').onclick = () => send('win:min'); $('#win-max').onclick = () => send('win:max'); $('#win-close').onclick = () => send('win:close');
+  const place = () => {   // 버튼 높이를 위쪽 줄에 맞추고, 내보내기 버튼 옆에 자리를 비워 둬요
+    const h = top.getBoundingClientRect().height; box.style.height = h + 'px';
+    const z = parseFloat(getComputedStyle(top).zoom) || 1; top.style.paddingRight = (box.getBoundingClientRect().width + 8) / z + 'px';
+  };
+  place(); addEventListener('resize', place); new ResizeObserver(place).observe(top);
+  wv.addEventListener('message', (e) => { if (e.data === 'win:max' || e.data === 'win:normal') { const mx = e.data === 'win:max'; $('#win-max svg').innerHTML = mx ? RESTORE : MAX; $('#win-max').title = mx ? '이전 크기로' : '최대화'; } });
+  addEventListener('mousedown', (e) => {   // 위쪽 줄의 빈 곳을 끌면 창이 움직이고, 두 번 누르면 최대화
+    if (e.button !== 0 || e.clientY > top.getBoundingClientRect().bottom || e.target.closest('button,input,select,textarea,a,label,video,canvas,[contenteditable]')) return;
+    if (e.detail === 2) send('win:max'); else send('win:drag');
+  }, true);
+  send('win:hello');
+})();
+
 /* 큰 영상의 가벼운 미리보기 사본이 다 만들어지면 알아서 바꿔 써요 */
 setInterval(async () => {
   if (!Object.values(S.media).some((m) => m.liteWait)) return;
