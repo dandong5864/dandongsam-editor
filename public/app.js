@@ -1950,7 +1950,7 @@ addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } c
   place(); addEventListener('resize', place); new ResizeObserver(place).observe(top);
   wv.addEventListener('message', (e) => { if (e.data === 'win:max' || e.data === 'win:normal') { const mx = e.data === 'win:max'; $('#win-max svg').innerHTML = mx ? RESTORE : MAX; $('#win-max').title = mx ? '이전 크기로' : '최대화'; } });
   addEventListener('mousedown', (e) => {   // 위쪽 줄의 빈 곳을 끌면 창이 움직이고, 두 번 누르면 최대화
-    if (e.button !== 0 || e.clientY > top.getBoundingClientRect().bottom || e.target.closest('button,input,select,textarea,a,label,video,canvas,[contenteditable]')) return;
+    if (e.button !== 0 || e.clientY > top.getBoundingClientRect().bottom || e.target.closest('button,input,select,textarea,a,label,video,canvas,[contenteditable],.brand')) return;   // 왼쪽 위 '단동샘 편집기'는 눌러서 홈 화면으로 가요
     if (e.detail === 2) send('win:max'); else send('win:drag');
   }, true);
   send('win:hello');
@@ -2215,8 +2215,8 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
   async function show() {
     const info = await fetch('/api/auto/jobs').then((r) => r.json()).catch(() => null);
     if (!info) return toast('서버에 연결할 수 없어요');
-    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false;   // 주로 쓰는 AI는 기억해 둬요
-    const skillMemo = {}, sttMemo = {};   // 메뉴를 누를 때마다 화면을 다시 그려도, 전에 받아 둔 내용을 바로 보여 줘서 아래쪽이 깜빡이지 않게 해요
+    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex');   // 주로 쓰는 AI는 기억해 둬요
+    const sttMemo = {};   // 메뉴를 누를 때마다 화면을 다시 그려도, 전에 받아 둔 내용을 바로 보여 줘서 아래쪽이 깜빡이지 않게 해요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
     const d = E('div', 'dlg auto-dlg', '<h2><i>✨</i>AI 자동 편집</h2>');
     const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.querySelector('h2').append(xb);   // 제목 줄 오른쪽 끝에 (다른 버튼과 겹치지 않게)
@@ -2385,44 +2385,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       }
       if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }
       Rt.append(row);
-      { // 작업 폴더에 복사된 스킬 (단동샘스킬 폴더)
-        const sk = E('div'); Rt.append(sk); const at = sel.path;
-        const fill = (r) => {
-          sk.innerHTML = ''; if (r.error) return; const off = r.off || [];
-          const one = (name, icon, info, title) => {   // 스킬 하나: 이름 줄 + [보기] [폴더 열기] [✕]
-            if (off.includes(name)) {   // 지운 스킬: 다시 넣을 수 있어요
-              sk.append(E('div', 'apath', esc(icon + ' ' + name + ' · 지웠어요')));
-              const rb = E('div', 'abtns'), bk = E('button', '', '↩ 다시 넣기'); bk.title = '편집기에 있는 원본을 이 작업 폴더에 다시 복사해요';
-              bk.onclick = async () => { const z = await post('/api/auto/delete', { what: 'skillback', path: at, name }); if (z.error) return toast(z.error); delete skillMemo[at]; draw(); };
-              rb.append(bk); sk.append(rb); return;
-            }
-            if (!info) return;
-            const ln = E('div', 'apath', esc(icon + ' ' + name + ' · 파일 ' + info.files.length + '개')); ln.title = info.dir + '\n' + info.files.join('\n'); sk.append(ln);
-            const br = E('div', 'abtns'), main = name === '단동샘스킬', open = () => (main ? skillOpen : !box.hidden);
-            const vb = E('button', '', '📖 스킬 보기'); vb.title = title;
-            const fb = E('button', '', '📁 스킬 폴더 열기'); fb.onclick = async () => { const z = await post('/api/auto/openfolder', { path: info.dir }); if (z.error) toast(z.error); };
-            const xb = E('button', 'ajx', '✕'); xb.title = '이 작업 폴더에서 스킬 지우기 (편집기 안의 원본은 그대로)';
-            xb.onclick = async () => {
-              if (!(await ask(`'${name}'을(를) 이 작업 폴더에서 지울까요?\n지우면 AI가 이 작업에서 이 스킬을 쓰지 못해요. [다시 넣기]로 언제든 되돌릴 수 있어요.`, { danger: true, ok: '지우기' }))) return;
-              const z = await post('/api/auto/delete', { what: 'skill', path: at, name }); if (z.error) return toast(z.error); delete skillMemo[at]; draw();
-            };
-            const box = E('div', 'abox'); box.textContent = info.text; box.style.whiteSpace = 'pre-wrap'; box.style.maxHeight = '320px'; box.style.overflow = 'auto'; box.hidden = main ? !skillOpen : true;
-            vb.textContent = open() ? '📖 스킬 접기' : '📖 스킬 보기';
-            vb.onclick = () => { box.hidden = !box.hidden; if (main) skillOpen = !box.hidden; vb.textContent = box.hidden ? '📖 스킬 보기' : '📖 스킬 접기'; };
-            br.append(vb, fb, xb); sk.append(br, box);
-          };
-          if (!r.exists && !r.motion && !off.length) return;
-          sk.append(E('div', 'asub', '복사된 스킬'));
-          one('단동샘스킬', '📦', r.exists ? { dir: r.dir, files: r.files, text: r.text } : null, 'SKILL.md 내용 보기');
-          if (motion || off.includes('모션그래픽스킬')) one('모션그래픽스킬', '🎬', r.motion, '모션그래픽 SKILL.md 내용 보기');   // 모션그래픽을 넣을 때만
-        };
-        if (skillMemo[at]) fill(skillMemo[at].r);
-        fetch('/api/auto/skill?path=' + encodeURIComponent(at)).then((x) => x.json()).then((r) => {
-          const key = JSON.stringify(r), old = skillMemo[at]; skillMemo[at] = { r, key };
-          if (!sel || sel.path !== at || !document.body.contains(sk)) return;
-          if (!old || old.key !== key) fill(r);   // 바뀐 게 있을 때만 다시 그려요
-        }).catch(() => {});
-      }
+      // 스킬은 편집기가 작업 폴더에 늘 자동으로 넣어 둬요 (따로 보여 주지 않아요)
       // 결과
       Rt.append(E('div', 'asub', '완성된 결과 (눌러서 열기)'));
       { const ib = E('button', 'primary aimp', '📥 받은 결과(.dsp) 가져오기'); const fi = E('input'); fi.type = 'file'; fi.accept = '.dsp,.json,.txt'; fi.hidden = true; ib.onclick = async () => { const r = await post('/api/auto/pickfile', { path: sel.path, from: ai === 'gpt' ? 'downloads' : '' }); if (r.unsupported) return fi.click(); if (r.canceled) return; if (r.error) return toast(r.error, null, 6000); openResult({ file: r.file }); }; ib.title = 'ChatGPT 등에서 내려받은 .dsp 파일을 고르면 이 작업에 넣고 바로 열어요';
