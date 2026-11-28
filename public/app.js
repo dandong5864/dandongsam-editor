@@ -1940,11 +1940,11 @@ addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/bye'); } c
 /* ============ 편집기 창 (위쪽 회색 줄 없이 한 줄로) ============ */
 (() => {
   const wv = window.chrome && window.chrome.webview; if (!wv) return;   // 엣지 창으로 열렸을 땐 그대로
-  const top = $('#top'), box = $('#win-btns'); box.hidden = false;
+  const top = $('#top'), box = $('#win-btns'); box.hidden = false; document.body.classList.add('framed');
   const send = (m) => wv.postMessage(m), MAX = '<path d="M.5.5h9v9h-9z"/>', RESTORE = '<path d="M2.5.5h7v7M.5 2.5h7v7h-7z"/>';
   $('#win-min').onclick = () => send('win:min'); $('#win-max').onclick = () => send('win:max'); $('#win-close').onclick = () => send('win:close');
   const place = () => {   // 버튼 높이를 위쪽 줄에 맞추고, 내보내기 버튼 옆에 자리를 비워 둬요
-    const h = top.getBoundingClientRect().height; box.style.height = h + 'px';
+    const h = top.getBoundingClientRect().height; box.style.height = h + 'px'; document.documentElement.style.setProperty('--winh', h + 'px');
     const z = parseFloat(getComputedStyle(top).zoom) || 1; top.style.paddingRight = (box.getBoundingClientRect().width + 8) / z + 'px';
   };
   place(); addEventListener('resize', place); new ResizeObserver(place).observe(top);
@@ -2218,7 +2218,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false, aiOpen = false;   // 주로 쓰는 AI는 기억해 둬요
     const skillMemo = {}, sttMemo = {};   // 메뉴를 누를 때마다 화면을 다시 그려도, 전에 받아 둔 내용을 바로 보여 줘서 아래쪽이 깜빡이지 않게 해요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
-    const d = E('div', 'dlg auto-dlg', '<h2>AI 자동 편집</h2>');
+    const d = E('div', 'dlg auto-dlg', '<h2><i>✨</i>AI 자동 편집</h2>');
     const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.insertBefore(xb, d.firstChild);
     const body = E('div'); d.append(body);
     const reload = async () => { closeModal(); await show(); };
