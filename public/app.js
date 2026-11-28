@@ -2219,7 +2219,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     const skillMemo = {}, sttMemo = {};   // 메뉴를 누를 때마다 화면을 다시 그려도, 전에 받아 둔 내용을 바로 보여 줘서 아래쪽이 깜빡이지 않게 해요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
     const d = E('div', 'dlg auto-dlg', '<h2><i>✨</i>AI 자동 편집</h2>');
-    const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.insertBefore(xb, d.firstChild);
+    const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.querySelector('h2').append(xb);   // 제목 줄 오른쪽 끝에 (다른 버튼과 겹치지 않게)
     const body = E('div'); d.append(body);
     const reload = async () => { closeModal(); await show(); };
     const draw = () => {
@@ -2382,21 +2382,33 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       { // 작업 폴더에 복사된 스킬 (단동샘스킬 폴더)
         const sk = E('div'); Rt.append(sk); const at = sel.path;
         const fill = (r) => {
-          sk.innerHTML = ''; if (r.error || !r.exists) return;
+          sk.innerHTML = ''; if (r.error) return; const off = r.off || [];
+          const one = (name, icon, info, title) => {   // 스킬 하나: 이름 줄 + [보기] [폴더 열기] [✕]
+            if (off.includes(name)) {   // 지운 스킬: 다시 넣을 수 있어요
+              sk.append(E('div', 'apath', esc(icon + ' ' + name + ' · 지웠어요')));
+              const rb = E('div', 'abtns'), bk = E('button', '', '↩ 다시 넣기'); bk.title = '편집기에 있는 원본을 이 작업 폴더에 다시 복사해요';
+              bk.onclick = async () => { const z = await post('/api/auto/delete', { what: 'skillback', path: at, name }); if (z.error) return toast(z.error); delete skillMemo[at]; draw(); };
+              rb.append(bk); sk.append(rb); return;
+            }
+            if (!info) return;
+            const ln = E('div', 'apath', esc(icon + ' ' + name + ' · 파일 ' + info.files.length + '개')); ln.title = info.dir + '\n' + info.files.join('\n'); sk.append(ln);
+            const br = E('div', 'abtns'), main = name === '단동샘스킬', open = () => (main ? skillOpen : !box.hidden);
+            const vb = E('button', '', '📖 스킬 보기'); vb.title = title;
+            const fb = E('button', '', '📁 스킬 폴더 열기'); fb.onclick = async () => { const z = await post('/api/auto/openfolder', { path: info.dir }); if (z.error) toast(z.error); };
+            const xb = E('button', 'ajx', '✕'); xb.title = '이 작업 폴더에서 스킬 지우기 (편집기 안의 원본은 그대로)';
+            xb.onclick = async () => {
+              if (!(await ask(`'${name}'을(를) 이 작업 폴더에서 지울까요?\n지우면 AI가 이 작업에서 이 스킬을 쓰지 못해요. [다시 넣기]로 언제든 되돌릴 수 있어요.`, { danger: true, ok: '지우기' }))) return;
+              const z = await post('/api/auto/delete', { what: 'skill', path: at, name }); if (z.error) return toast(z.error); delete skillMemo[at]; draw();
+            };
+            const box = E('div', 'abox'); box.textContent = info.text; box.style.whiteSpace = 'pre-wrap'; box.style.maxHeight = '320px'; box.style.overflow = 'auto'; box.hidden = main ? !skillOpen : true;
+            vb.textContent = open() ? '📖 스킬 접기' : '📖 스킬 보기';
+            vb.onclick = () => { box.hidden = !box.hidden; if (main) skillOpen = !box.hidden; vb.textContent = box.hidden ? '📖 스킬 보기' : '📖 스킬 접기'; };
+            br.append(vb, fb, xb); sk.append(br, box);
+          };
+          if (!r.exists && !r.motion && !off.length) return;
           sk.append(E('div', 'asub', '복사된 스킬'));
-          const ln = E('div', 'apath', esc('📦 단동샘스킬 · 파일 ' + r.files.length + '개')); ln.title = r.dir + '\n' + r.files.join('\n'); sk.append(ln);
-          const br = E('div', 'abtns'); const vb = E('button', '', skillOpen ? '📖 스킬 접기' : '📖 스킬 보기'); vb.title = 'SKILL.md 내용 보기';
-          const fb = E('button', '', '📁 스킬 폴더 열기'); fb.onclick = async () => { const z = await post('/api/auto/openfolder', { path: r.dir }); if (z.error) toast(z.error); };
-          const box = E('div', 'abox'); box.textContent = r.text; box.style.whiteSpace = 'pre-wrap'; box.style.maxHeight = '320px'; box.style.overflow = 'auto'; box.hidden = !skillOpen;
-          vb.onclick = () => { skillOpen = !skillOpen; box.hidden = !skillOpen; vb.textContent = skillOpen ? '📖 스킬 접기' : '📖 스킬 보기'; };
-          br.append(vb, fb); sk.append(br, box);
-          if (r.motion && motion) {   // 모션그래픽을 넣을 때만: 따로 떨어진 모션그래픽 스킬
-            const ml = E('div', 'apath', esc('🎬 모션그래픽스킬 · 파일 ' + r.motion.files.length + '개')); ml.title = r.motion.dir + '\n' + r.motion.files.join('\n'); sk.append(ml);
-            const mb = E('div', 'abtns'), mv = E('button', '', '📖 스킬 보기'), mf = E('button', '', '📁 스킬 폴더 열기'); mv.title = '모션그래픽 SKILL.md 내용 보기';
-            const mbox = E('div', 'abox'); mbox.textContent = r.motion.text; mbox.style.whiteSpace = 'pre-wrap'; mbox.style.maxHeight = '320px'; mbox.style.overflow = 'auto'; mbox.hidden = true;
-            mv.onclick = () => { mbox.hidden = !mbox.hidden; mv.textContent = mbox.hidden ? '📖 스킬 보기' : '📖 스킬 접기'; }; mf.onclick = async () => { const z = await post('/api/auto/openfolder', { path: r.motion.dir }); if (z.error) toast(z.error); };
-            mb.append(mv, mf); sk.append(mb, mbox);
-          }
+          one('단동샘스킬', '📦', r.exists ? { dir: r.dir, files: r.files, text: r.text } : null, 'SKILL.md 내용 보기');
+          if (motion || off.includes('모션그래픽스킬')) one('모션그래픽스킬', '🎬', r.motion, '모션그래픽 SKILL.md 내용 보기');   // 모션그래픽을 넣을 때만
         };
         if (skillMemo[at]) fill(skillMemo[at].r);
         fetch('/api/auto/skill?path=' + encodeURIComponent(at)).then((x) => x.json()).then((r) => {

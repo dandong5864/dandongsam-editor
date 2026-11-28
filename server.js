@@ -955,7 +955,11 @@ function putTools(sd) {
   if (!Object.keys(t).length) return; const f = path.join(sd, '도구위치.json'), txt = JSON.stringify(t, null, 1);
   try { if (fs.readFileSync(f, 'utf8') === txt) return; } catch (e) {} try { fs.writeFileSync(f, txt, 'utf8'); } catch (e) {}
 }
-function putSkill(dir) { if (skillDone.has(dir) && fs.existsSync(path.join(dir, '단동샘스킬', 'SKILL.md')) && fs.existsSync(path.join(dir, '모션그래픽스킬', 'SKILL.md'))) return; try { if (fs.existsSync(SKILL_SRC)) { const sd = path.join(dir, '단동샘스킬'); copyDir(SKILL_SRC, sd); putTools(sd); } if (fs.existsSync(MOTION_SRC)) { const md = path.join(dir, '모션그래픽스킬'); copyDir(MOTION_SRC, md); putTools(md); } skillDone.add(dir); } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
+const SKILL_NAMES = ['단동샘스킬', '모션그래픽스킬'];
+const skillOffFile = (dir) => path.join(dir, '.지운스킬.json');   // 사용자가 지운 스킬은 다시 넣지 않아요 (다시 넣기를 누르기 전까지)
+const skillOff = (dir) => { try { const a = JSON.parse(fs.readFileSync(skillOffFile(dir), 'utf8')); return Array.isArray(a) ? a.filter((n) => SKILL_NAMES.includes(n)) : []; } catch (e) { return []; } };
+function setSkillOff(dir, name, off) { const a = new Set(skillOff(dir)); if (off) a.add(name); else a.delete(name); skillDone.delete(dir); if (a.size) fs.writeFileSync(skillOffFile(dir), JSON.stringify([...a]), 'utf8'); else { try { fs.unlinkSync(skillOffFile(dir)); } catch (e) {} } }
+function putSkill(dir) { const off = skillOff(dir); if (skillDone.has(dir) && SKILL_NAMES.every((n) => off.includes(n) || fs.existsSync(path.join(dir, n, 'SKILL.md')))) return; try { if (!off.includes('단동샘스킬') && fs.existsSync(SKILL_SRC)) { const sd = path.join(dir, '단동샘스킬'); copyDir(SKILL_SRC, sd); putTools(sd); } if (!off.includes('모션그래픽스킬') && fs.existsSync(MOTION_SRC)) { const md = path.join(dir, '모션그래픽스킬'); copyDir(MOTION_SRC, md); putTools(md); } skillDone.add(dir); } catch (e) { console.warn('스킬 복사 실패:', e.message); } }
 function prepareJob(dir) {
   fs.mkdirSync(path.join(dir, '결과'), { recursive: true });
   fs.writeFileSync(path.join(dir, '편집파일_만드는법.txt'), DSP_GUIDE, 'utf8');
@@ -1656,7 +1660,7 @@ const server = http.createServer(async (req, res) => {
       walk(sd, '', 0); let text = ''; try { text = fs.readFileSync(path.join(sd, 'SKILL.md'), 'utf8'); } catch (e) {}
       const md = path.join(dir, '모션그래픽스킬'), mfiles = [], f0 = files.sort().slice(); files.length = 0; walk(md, '', 0); mfiles.push(...files.sort());
       let mtext = ''; try { mtext = fs.readFileSync(path.join(md, 'SKILL.md'), 'utf8'); } catch (e) {}
-      return json(res, 200, { dir: sd, exists: !!text, files: f0, text, motion: mtext ? { dir: md, files: mfiles, text: mtext } : null });
+      return json(res, 200, { dir: sd, exists: !!text, files: f0, text, motion: mtext ? { dir: md, files: mfiles, text: mtext } : null, off: skillOff(dir) });
     }
     if (req.method === 'GET' && p === '/api/auto/stt') {   // 받아 적기 상태 (작업 폴더 기준)
       const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
@@ -1685,6 +1689,14 @@ const server = http.createServer(async (req, res) => {
       if (b.what === 'result') {
         if (!autoAllowed(f) || !/\.dsp$/i.test(f)) return json(res, 400, { error: '지울 수 없어요' });
         try { fs.unlinkSync(f); } catch (e) { return json(res, 500, { error: e.message }); } return json(res, 200, { ok: true });
+      }
+      if (b.what === 'skill' || b.what === 'skillback') {   // 작업 폴더에 복사된 스킬 지우기 / 다시 넣기 (편집기 안의 원본은 그대로)
+        const nm = String(b.name || ''); if (!SKILL_NAMES.includes(nm) || !autoAllowed(f) || !fs.existsSync(f) || !fs.statSync(f).isDirectory()) return json(res, 400, { error: '지울 수 없어요' });
+        try {
+          if (b.what === 'skill') { fs.rmSync(path.join(f, nm), { recursive: true, force: true }); setSkillOff(f, nm, true); }
+          else { setSkillOff(f, nm, false); putSkill(f); }
+        } catch (e) { return json(res, 500, { error: '하지 못했어요: ' + e.message }); }
+        return json(res, 200, { ok: true });
       }
       if (b.what === 'unlink') { c.extra = c.extra.filter((e) => path.resolve(e) !== f); autoSave(c); return json(res, 200, { ok: true }); }
       if (b.what === 'job') {
