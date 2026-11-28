@@ -2215,7 +2215,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
   async function show() {
     const info = await fetch('/api/auto/jobs').then((r) => r.json()).catch(() => null);
     if (!info) return toast('서버에 연결할 수 없어요');
-    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false, aiOpen = false;   // 주로 쓰는 AI는 기억해 둬요
+    let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false;   // 주로 쓰는 AI는 기억해 둬요
     const skillMemo = {}, sttMemo = {};   // 메뉴를 누를 때마다 화면을 다시 그려도, 전에 받아 둔 내용을 바로 보여 줘서 아래쪽이 깜빡이지 않게 해요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
     const d = E('div', 'dlg auto-dlg', '<h2><i>✨</i>AI 자동 편집</h2>');
@@ -2233,7 +2233,8 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       info.jobs.forEach((j) => {
         const r = E('div', 'ajob' + (sel && sel.path === j.path ? ' on' : ''));
         const main = E('button', 'ajm', `<b>${esc(j.name)}</b><small>영상 ${j.videos} · 결과 ${j.results.length} · ${fmtDate(j.mtime)}</small>`);
-        main.onclick = async () => { sel = j; sv(JK, j.path); draw(); post('/api/auto/openfolder', { path: j.path }); };
+        main.title = j.path + '\n누르면 폴더가 열려요';
+        main.onclick = async () => { sel = j; sv(JK, j.path); draw(); const z = await post('/api/auto/openfolder', { path: j.path }); if (z && z.error) toast(z.error); };
         r.append(main);
         if (j.kind !== 'legacy') { const x = E('button', 'ajx', '✕'); x.title = j.kind === 'extra' ? '목록에서 빼기 (폴더는 그대로)' : '폴더 지우기'; x.onclick = async () => {
           if (j.kind === 'extra') { await post('/api/auto/delete', { what: 'unlink', path: j.path }); }
@@ -2253,9 +2254,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       L.append(footer());
       // 오른쪽: 선택한 작업
       if (!sel) { Rt.append(E('div', 'aempty', '왼쪽에서 작업을 만들거나<br>폴더를 지정해 주세요')); return; }
-      const top = E('div', 'atop'); top.append(E('div', 'ahead', esc(sel.name)));
-      const ob = E('button', 'sm', '📁 폴더 열기'); ob.onclick = async () => { const z = await post('/api/auto/openfolder', { path: sel.path }); if (z.error) toast(z.error); }; top.append(ob);
-      Rt.append(top, E('div', 'apath', esc(sel.path)));
+      // 작업 이름·주소·[폴더 열기]는 왼쪽 목록 카드와 같아서 빼요 (카드를 누르면 폴더가 열려요)
       // 영상 모양
       const rr = E('div', 'arow'); rr.append(E('span', 'alab', '영상 모양'));
       const rc = chips([['9:16', '📱 세로 (쇼츠)'], ['16:9', '🖥 가로 (유튜브)']], ratio, (v) => { ratio = v; sv(RK, v); draw(); }); rc.classList.add('seg'); rr.append(rc); Rt.append(rr);
@@ -2344,10 +2343,10 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       };
       if (!AI[ai]) ai = 'codex';
       Rt.append(E('div', 'asub', 'AI에게 보낼 말'));
-      const tabs = E('div', 'chips aitabs');   // 주로 쓰는 AI 하나만 보이고, 누르면 4개가 펼쳐져요
-      if (!aiOpen) { const t = E('button', 'chip on', AI[ai].name + ' ▾'); t.title = '다른 AI 고르기'; t.onclick = () => { aiOpen = true; draw(); }; tabs.append(t); }
-      else Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { ai = k; aiOpen = false; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
-      Rt.append(tabs, E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt)));
+      const tabs = E('div', 'chips aitabs');   // AI 4개를 왼쪽에 세로로, 보낼 말은 오른쪽에 (주로 쓰는 AI는 기억해 둬요)
+      Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { if (ai === k) return; ai = k; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
+      const aside = E('div', 'aiside'), ar = E('div', 'aimain'); ar.append(E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt))); aside.append(tabs, ar);
+      Rt.append(aside);
       const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
       { // 🎤 받아 적기: 편집기가 작업 폴더의 영상 말소리를 먼저 글로 받아 적어 "받아적기" 폴더에 둬요 (AI가 그 시각으로 컷·자막을 만들어요)
         const at = sel.path, sm = sttMemo[at], sb = E('button', '', sm ? sm.t : '🎤 받아 적기'); if (sm) sb.disabled = sm.d; const tip0 = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)'; sb.title = sm && sm.r ? '누르면 멈춰요' : tip0; if (sm && sm.r) sb.dataset.run = '1';
