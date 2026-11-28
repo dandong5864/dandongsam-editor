@@ -1672,8 +1672,11 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/auto/terminal') {
       const b = await readBody(req); const d = path.resolve(String(b.path || ''));
       if (!autoAllowed(d) || /["%&|<>^]/.test(d)) return json(res, 400, { error: '열 수 없는 폴더예요' });
-      if (process.platform !== 'win32') return json(res, 400, { error: '윈도우에서만 쓸 수 있어요. 폴더 주소창에 cmd 를 입력해 열어 주세요' });
-      spawn('cmd.exe', ['/c', `start "" /D "${d}" cmd /k claude`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore' }).unref(); return json(res, 200, { ok: true });
+      if (process.platform !== 'win32') return json(res, 200, { unsupported: true });   // 윈도우가 아니면 복사만 해요
+      const tool = b.tool === 'codex' ? 'codex' : 'claude';   // 이 폴더에서 Codex 나 Claude Code 를 명령 창으로 열어요
+      const have = await new Promise((ok) => execFile('where', [tool], { windowsHide: true, timeout: 8000 }, (e) => ok(!e)));
+      if (!have) return json(res, 200, { missing: true, url: tool === 'codex' ? 'https://developers.openai.com/codex/cli' : 'https://code.claude.com/docs/ko/setup' });   // 설치돼 있지 않으면 설치 안내 페이지를 열어요
+      spawn('cmd.exe', ['/c', `start "" /D "${d}" cmd /k ${tool}`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore' }).unref(); return json(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/auto/delete') {
       const b = await readBody(req); const f = path.resolve(String(b.path || '')); const c = autoCfg();

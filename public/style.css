@@ -643,3 +643,12 @@ body.framed .auto-dlg{padding-top:calc(var(--winh,52px) + 6px)!important}
 
 .aiside{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;align-items:start}.aiside .aitabs{flex-direction:column;margin:0;padding:0}.aiside .aitabs .chip{flex:none;width:100%;max-width:none}.aiside .ahow{margin-top:0}
 @media (max-width:760px){.aiside{grid-template-columns:minmax(0,1fr)}.aiside .aitabs{display:grid;grid-template-columns:1fr 1fr}}
+/* AI 칸(ChatGPT·Claude)이 오른쪽에 열리면 AI 자동 편집 화면과 확인 창·알림은 왼쪽에만 */
+#ai-split{display:none;position:fixed;top:var(--winh,0px);bottom:0;right:var(--aiw,0px);width:8px;z-index:99998;cursor:ew-resize;background:#2e2e38}
+#ai-split:hover{background:#ffd43b}
+body.aiopen #ai-split{display:block}
+body.aiopen .auto-dlg{width:calc(100vw - var(--aiw,0px) - 8px)!important;justify-self:start;padding-left:2.5vw!important;padding-right:2.5vw!important;container-type:inline-size}
+@container (max-width:980px){.agrid{grid-template-columns:minmax(0,1fr)!important}.aleft{border-right:0!important;padding-right:0!important}}
+@container (max-width:560px){.aiside{grid-template-columns:minmax(0,1fr)!important}.aiside .aitabs{display:grid;grid-template-columns:1fr 1fr}}
+body.aiopen .askbg{right:calc(var(--aiw,0px) + 8px)}
+body.aiopen #toast{left:calc((100% - var(--aiw,0px) - 8px) / 2)}

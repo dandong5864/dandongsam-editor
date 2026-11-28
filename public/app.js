@@ -2203,6 +2203,32 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
   const JK = 'vtk.autojob.v1', RK = 'vtk.autoratio.v1';
   const ld = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const sv = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  // ChatGPT·Claude 는 편집기 창 오른쪽에 붙여서 열어요 (창 모드일 때. 아니면 인터넷 창에서)
+  const wv = window.chrome && window.chrome.webview, WEB = { gpt: 'https://chatgpt.com/', claude: 'https://claude.ai/new' };
+  let pane = null, paneK = 0;
+  const paneW = () => { document.documentElement.style.setProperty('--aiw', Math.round(innerWidth * paneK / 1000) + 'px'); };
+  function openPane(k) {
+    if (!wv) { window.open(WEB[k], '_blank', 'noopener'); return; }
+    const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--winh')) || 0;
+    pane = k; wv.postMessage(`ai:show:${k}:${Math.round(top / innerHeight * 10000)}`);
+  }
+  function hidePane() { if (pane && wv) wv.postMessage('ai:hide'); pane = null; }
+  if (wv) {
+    const bar = E('div'); bar.id = 'ai-split'; bar.title = '끌어서 크기 바꾸기'; document.body.append(bar);
+    bar.addEventListener('mousedown', (e) => { if (e.button) return; e.preventDefault(); wv.postMessage('ai:drag'); });
+    wv.addEventListener('message', (e) => {
+      const m = String(e.data);
+      if (m.startsWith('ai:w:')) { paneK = +m.slice(5) || 420; paneW(); if (!document.body.classList.contains('aiopen')) { document.body.classList.add('aiopen'); const cb = modal.querySelector('.auto-dlg .abtns .primary'); if (cb) cb.scrollIntoView({ block: 'nearest' }); } }
+      else if (m === 'ai:hidden') { pane = null; document.body.classList.remove('aiopen'); }
+    });
+    addEventListener('resize', () => { if (pane) paneW(); });
+    new MutationObserver(() => { if (pane && (!modal.classList.contains('on') || !modal.querySelector('.auto-dlg'))) hidePane(); }).observe(modal, { attributes: true, childList: true });   // AI 자동 편집 화면을 닫으면 같이 닫혀요
+  }
+  async function openTool(k, dir) {   // Codex·Claude Code 는 이 폴더에서 명령 창으로 열어요
+    const tool = k === 'codex' ? 'codex' : 'claude', z = await post('/api/auto/terminal', { path: dir, tool });
+    if (z.missing) { if (ld('vtk.toolpage.' + tool, '')) return; sv('vtk.toolpage.' + tool, '1'); window.open(z.url, '_blank', 'noopener'); return; }   // 설치돼 있지 않으면 설치 안내를 한 번만 열어요
+    if (z.error) toast(z.error, null, 6000);
+  }
   async function openResult(it) {
     toast('불러오는 중… 영상이 길면 잠시 걸려요', null, 6000);
     const r = await post('/api/auto/open', { file: it.file });
@@ -2336,18 +2362,18 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       const MOTION_GPT = motion ? MOTION_RULE.replace('폴더 안 "모션그래픽스킬/SKILL.md"(스킬 목록에 $dandongsam-motion 이 있으면 그것)', '첨부한 모션그래픽 "SKILL.md"').replace(' 모션그래픽 영상 파일은 직접 만들지 마(편집기가 열 때 만들어).', ' 모션그래픽 영상 파일이나 HTML 은 만들지 마(편집기가 열 때 만들어).') : '';
       const tail = tail0 + GENRE_RULE + (MODE_RULE[settings.mode] || '') + VOICE_RULE + MOTION_RULE + (SPLIT_RULE[settings.subSplit] || '') + (stepCard ? ' 강의에서 주제(단계)가 바뀌는 곳마다, 폴더 안 "편집설정.json"의 stepCard 대로 제목 화면을 넣어 줘: .dsp 의 texts 에 kind "bg"(color, opacity, start, end)인 색 배경 항목 하나와, 화면 가운데(x 50)에 제목을 보여 주는 kind "text" 항목(small 이 있으면 위쪽 작은 글 항목도)을 같은 시간(seconds 초 동안)으로 만들어 줘. 제목 글은 그 단계의 주제 이름으로 지어 주고, stepCard 에 items 가 있으면 그 항목들을 그대로 복사해서 start/end 만 맞춰 줘.' : '');
       const AI = {
-        codex: { name: 'Codex', how: 'Codex에서 이 폴더를 작업 폴더로 열고 아래 말을 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
+        codex: { name: 'Codex', how: '[스킬 복사]를 누르면 이 폴더에서 Codex가 열려요. 아래 말을 붙여 넣어 보내요. (영상이 커도 첨부 없이 돼요)', prompt: `이 폴더(${P})에 있는 영상과 소스를 편집해 줘. 스킬 목록에 $dandongsam-shorts-codex 가 있으면 그것을 써 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail}` },
         gpt: { name: 'ChatGPT', how: `채팅에 영상 파일과 폴더 안의 "편집파일_만드는법.txt", "편집설정.json", "받아적기" 폴더 안의 파일${settings.genre ? `, "단동샘스킬/장르/${GFILE[settings.genre]}.md"` : ''}${motion ? ', "모션그래픽스킬/SKILL.md"' : ''}을 첨부하고 아래 말을 보내요. 받은 .dsp 파일은 아래 "📥 받은 결과 가져오기"로 열어요.`, prompt: `첨부한 영상을 편집해 줘. 첨부한 "편집파일_만드는법.txt"와 "편집설정.json"을 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 만들어서 파일로 줘. 첨부한 ".words.json" 파일(받아적기)이 있으면 음성 인식을 따로 하지 말고 그 단어 시각으로 말 없는 구간·군말·되풀이한 말을 잘라 영상을 여러 조각(clips 의 in/out)으로 나누고, 자막도 그 시각으로 만들어 줘. 받아적기 파일이 없고 소리를 알아들을 수 없으면 자막을 지어내지 말고 알려 줘. media 의 name 은 첨부한 영상 파일 이름 그대로(경로 없이) 쓰고, .dsp 는 설명(//) 없는 순수 JSON 으로, 시간은 초 단위 숫자로 써 줘. ${(GENRE_RULE ? tail.replace(GENRE_RULE, GENRE_GPT) : tail).replace(MOTION_RULE || '\u0000', MOTION_GPT)}` },
         claude: { name: 'Claude 앱', how: 'Claude 앱에서 이 폴더를 연결한 뒤 아래 말을 보내요.', prompt: `"${P}" 폴더에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 폴더 안의 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 폴더에 접근할 수 없으면 추측하지 말고 먼저 알려 줘.` },
-        cc: { name: 'Claude Code', how: '아래 버튼으로 이 폴더에서 Claude Code 를 열고 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.`, term: true },
+        cc: { name: 'Claude Code', how: '[스킬 복사]를 누르면 이 폴더에서 Claude Code가 열려요. 문구를 붙여 넣어요. (직접 열 땐 폴더 주소창에 cmd 입력 → claude)', prompt: `현재 폴더(${P})에 있는 영상과 소스를 편집해 줘. 폴더 안에 "단동샘스킬" 폴더가 있으면 그 안의 SKILL.md 를 먼저 읽고 그 순서와 scripts 안의 파이썬 스크립트를 그대로 따라 줘. 먼저 "편집파일_만드는법.txt"를 읽고, 불필요한 구간은 자르고 자막을 넣은 다음, 단동샘 편집기에서 열 수 있는 편집 파일(.dsp)을 "${R}" 폴더에 만들어 줘. ${tail} 이 폴더의 파일이 보이지 않으면 추측하지 말고 먼저 알려 줘.` },
       };
       if (!AI[ai]) ai = 'codex';
       Rt.append(E('div', 'asub', 'AI에게 보낼 말'));
       const tabs = E('div', 'chips aitabs');   // AI 4개를 왼쪽에 세로로, 보낼 말은 오른쪽에 (주로 쓰는 AI는 기억해 둬요)
-      Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { if (ai === k) return; ai = k; sv('vtk.autoai.v1', k); draw(); }; tabs.append(t); });
+      Object.keys(AI).forEach((k) => { const t = E('button', 'chip' + (ai === k ? ' on' : ''), AI[k].name); t.onclick = () => { if (ai === k) return; ai = k; sv('vtk.autoai.v1', k); if (pane) { if (WEB[k]) openPane(k); else hidePane(); } draw(); }; tabs.append(t); });
       const aside = E('div', 'aiside'), ar = E('div', 'aimain'); ar.append(E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt))); aside.append(tabs, ar);
       Rt.append(aside);
-      const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
+      const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); if (WEB[ai]) openPane(ai); else openTool(ai, sel.path); }; row.append(cb);
       { // 🎤 받아 적기: 편집기가 작업 폴더의 영상 말소리를 먼저 글로 받아 적어 "받아적기" 폴더에 둬요 (AI가 그 시각으로 컷·자막을 만들어요)
         const at = sel.path, sm = sttMemo[at], sb = E('button', '', sm ? sm.t : '🎤 받아 적기'); if (sm) sb.disabled = sm.d; const tip0 = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)'; sb.title = sm && sm.r ? '누르면 멈춰요' : tip0; if (sm && sm.r) sb.dataset.run = '1';
         let polling = false;
@@ -2383,7 +2409,6 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
         fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).catch(() => null).then((st) => { if (st && !st.error ? paintM(st) : sm && (sm.r || sm.d)) poll(); });   // 응답이 없는데 전에 '받아 적는 중'이었으면 다시 확인해서 알려 줘요
         row.append(sb);
       }
-      if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }
       Rt.append(row);
       // 스킬은 편집기가 작업 폴더에 늘 자동으로 넣어 둬요 (따로 보여 주지 않아요)
       // 결과
