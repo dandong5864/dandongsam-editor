@@ -780,6 +780,14 @@ const AUTO_DEFAULT = hasFiles(AUTO_OLD) ? AUTO_OLD : path.join(USER_BASE, '자�
 function autoCfg() { let c = {}; try { c = JSON.parse(fs.readFileSync(AUTO_CFG, 'utf8')); } catch (e) {} return { root: c.root || AUTO_DEFAULT, extra: Array.isArray(c.extra) ? c.extra : [] }; }
 function autoSave(c) { try { fs.writeFileSync(AUTO_CFG, JSON.stringify(c)); } catch (e) {} }
 const inside = (p, root) => { const r = path.resolve(root), q = path.resolve(p); return q === r || q.startsWith(r + path.sep); };
+// 지우면 안 되는 중요한 폴더들: 저장 위치(root)가 이 폴더이거나 이 폴더를 품고 있으면 안 되고, 작업 폴더로 지울 수도 없어요
+function keepDirs() {
+  const h = os.homedir(), l = [h, ROOT, DATA_ROOT, USER_BASE, getOutDir(), findDownloadsCached(), ...['Downloads', 'Desktop', 'Documents', 'Pictures', 'Videos', 'Music', 'OneDrive', '바탕 화면', '문서', '다운로드'].map((n) => path.join(h, n))];
+  return l.filter(Boolean).map((d) => path.resolve(d));
+}
+let dlCache = null; const findDownloadsCached = () => dlCache || (dlCache = findDownloads());
+const tooBroad = (dir) => keepDirs().some((k) => inside(k, dir));   // dir 이 중요한 폴더 자신이거나 그 위 폴더
+const looksLikeJob = (dir) => ['결과', '편집파일_만드는법.txt', '단동샘스킬'].some((n) => fs.existsSync(path.join(dir, n)));   // 편집기가 만든 작업 폴더 표시
 function autoAllowed(p) { const c = autoCfg(); return inside(p, c.root) || c.extra.some((e) => inside(p, e)); }
 const MEDIA_EXT = ['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
 const DSP_GUIDE = `단동샘 편집기 프로젝트 파일(.dsp) 만드는 법
@@ -1548,7 +1556,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && p === '/api/auto/root') {
       const b = await readBody(req); const dir = path.resolve(String(b.path || '').replace(/^"|"$/g, ''));
-      if (!String(b.path || '').trim() || dir === path.parse(dir).root || dir === path.resolve(os.homedir())) return json(res, 400, { error: '드라이브 전체나 사용자 폴더 전체는 고를 수 없어요. 그 안의 폴더를 골라 주세요' });   // 그 아래 모든 폴더가 작업으로 잡혀 지워질 수 있어서 막아요
+      if (!String(b.path || '').trim() || dir === path.parse(dir).root || dir === path.resolve(os.homedir())) return json(res, 400, { error: '드라이브 전체나 사용자 폴더 전체는 고를 수 없어요. 그 안의 폴더를 골라 주세요' });
+      if (tooBroad(dir)) return json(res, 400, { error: '다운로드·바탕 화면·문서 같은 큰 폴더나 편집기 폴더는 고를 수 없어요. 그 안에 새 폴더를 만들어 골라 주세요' });   // 그 아래 모든 폴더가 작업으로 잡혀 지워질 수 있어서 막아요
       try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { return json(res, 400, { error: '그 위치에 폴더를 만들 수 없어요' }); }
       const c = autoCfg(); c.root = dir; autoSave(c); return json(res, 200, { ok: true });
     }
@@ -1617,6 +1626,7 @@ const server = http.createServer(async (req, res) => {
       if (b.what === 'unlink') { c.extra = c.extra.filter((e) => path.resolve(e) !== f); autoSave(c); return json(res, 200, { ok: true }); }
       if (b.what === 'job') {
         if (!inside(f, c.root) || f === path.resolve(c.root) || path.dirname(f) !== path.resolve(c.root)) return json(res, 400, { error: '이 폴더는 여기서 지울 수 없어요 (직접 지워 주세요)' });
+        if (tooBroad(f) || !looksLikeJob(f)) return json(res, 400, { error: '편집기가 만든 작업 폴더가 아니라서 여기서 지울 수 없어요 (직접 지워 주세요)' });   // 저장 위치를 넓은 곳으로 바꿨을 때 다른 폴더를 지우지 않게
         try { fs.rmSync(f, { recursive: true, force: true }); } catch (e) { return json(res, 500, { error: '지우지 못했어요: ' + e.message }); } return json(res, 200, { ok: true });
       }
       return json(res, 400, { error: '잘못된 요청' });

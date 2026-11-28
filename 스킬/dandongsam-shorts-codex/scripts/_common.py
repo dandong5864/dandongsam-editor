@@ -12,13 +12,20 @@ def nfc(s): return unicodedata.normalize('NFC', s)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS_FILE = '도구위치.json'   # 단동샘 편집기가 스킬을 복사할 때 자기 안의 ffmpeg/ffprobe 위치를 적어 둬요
 
+def _inside(p, d):
+    try: return os.path.commonpath([os.path.normcase(os.path.realpath(p)), os.path.normcase(os.path.realpath(d))]) == os.path.normcase(os.path.realpath(d))
+    except Exception: return False
+
 def _editor_tool(tool):
-    """편집기에 들어 있는 ffmpeg/ffprobe 위치 (스킬 폴더 → 지금 폴더의 단동샘스킬 → 지금 폴더 순서로 찾아요)."""
-    for d in (SKILL_DIR, os.path.join(os.getcwd(), '단동샘스킬'), os.getcwd()):
+    """편집기에 들어 있는 ffmpeg/ffprobe 위치 (스킬 폴더 → 지금 폴더의 단동샘스킬 순서로 찾아요).
+    남이 준 작업 폴더에 가짜 도구위치.json 을 심어 둘 수 있어서, 이름이 ffmpeg/ffprobe 이고 작업 폴더 밖에 있는 파일만 믿어요."""
+    for d in (SKILL_DIR, os.path.join(os.getcwd(), '단동샘스킬')):
         try:
             with open(os.path.join(d, TOOLS_FILE), encoding='utf-8-sig') as f: p = (json.load(f) or {}).get(tool)
         except Exception: continue
-        if not p or not os.path.isfile(p): continue
+        if not p or not isinstance(p, str) or not os.path.isabs(p) or not os.path.isfile(p): continue
+        if os.path.basename(p).lower() not in (tool, tool + '.exe'): continue
+        if _inside(p, os.path.dirname(os.path.abspath(d))) or _inside(p, os.getcwd()): continue   # 작업 폴더 안의 프로그램은 안 써요
         if os.name != 'nt' and p.lower().endswith('.exe'): continue   # 윈도우용 파일은 다른 운영체제에서 못 써요
         if os.name != 'nt' and not os.access(p, os.X_OK): continue
         return p
