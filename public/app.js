@@ -143,7 +143,7 @@ let spare = document.createElement('video'); spare.playsInline = true; spare.pre
 video.style.visibility = 'visible';
 const clipKey = (c) => c.id + '|' + c.mediaId + '|' + c.in + '|' + c.speed;
 function preloadNext() {
-  if (!cur) return; const i = S.clips.indexOf(cur), nx = S.clips[i + 1]; if (!nx) return;
+  if (!cur || spareJob) return; const i = S.clips.indexOf(cur), nx = S.clips[i + 1]; if (!nx) return;
   const key = clipKey(nx); if (spare.dataset.for === key) return; spare.dataset.for = key;
   if (spare.dataset.mid !== nx.mediaId) { spare.dataset.mid = nx.mediaId; spare.src = mediaUrl(nx.mediaId); }
   const go = () => { try { spare.currentTime = nx.in; } catch (e) {} spare.playbackRate = clamp(nx.speed, 0.0625, 16); };
@@ -172,6 +172,23 @@ function ensureSrc(c) {
     video.addEventListener('loadedmetadata', done);
   });
 }
+let spareJob = null;
+function readyOnSpare(mid, st) {
+  if (spareJob && spareJob.mid === mid) return spareJob.p;   // 같은 영상을 이미 부르는 중이면 그걸 기다려요 (거꾸로 재생처럼 자주 불러도 멈추지 않게)
+  if (spareJob) spareJob.fin(false);   // 다른 영상을 부르던 건 그만둬요
+  const job = { mid };
+  job.p = new Promise((res) => {
+    const el = spare; let n = 0, done = false;
+    const fin = job.fin = (ok) => { if (done) return; done = true; if (spareJob === job) spareJob = null; clearTimeout(tm); el.removeEventListener('loadedmetadata', meta); el.removeEventListener('seeked', got); res(ok); };
+    const got = () => { if (done) return; if (el.readyState >= 2) fin(true); else if (++n < 3) setTimeout(got, 30); else fin(true); };
+    const meta = () => { if (done) return; el.addEventListener('seeked', got, { once: true }); try { el.currentTime = st; } catch (e) { fin(true); } };
+    const tm = setTimeout(() => fin(true), 4000);   // 너무 오래 걸리면 그냥 바꿔요
+    el.pause(); el.dataset.for = '';
+    if (el.dataset.mid !== mid) { el.dataset.mid = mid; el.src = mediaUrl(mid); el.addEventListener('loadedmetadata', meta, { once: true }); }
+    else if (el.readyState >= 1) meta(); else el.addEventListener('loadedmetadata', meta, { once: true });
+  });
+  spareJob = job; return job.p;
+}
 async function seek(t, silent) {
   const my = ++token;
   layout(); t = clamp(t, 0, S.total); S.t = t;
@@ -179,10 +196,18 @@ async function seek(t, silent) {
   const loc = locate(t);
   if (!loc) { cur = null; video.style.display = 'none'; updateUI(); return; }
   const c = loc.c;
-  await ensureSrc(c);
-  if (my !== token) return;
   const st = clamp(c.rev ? c.out - (t - c.start) * c.speed : c.in + (t - c.start) * c.speed, c.in, Math.max(c.in, c.out - 0.001));
-  video.currentTime = st; video.playbackRate = clamp(c.speed * (playing ? shuttle : 1), 0.0625, 16);
+  if (video.dataset.mid !== c.mediaId && video.readyState >= 2 && video.style.display !== 'none') {
+    // 다른 영상으로 건너뛸 때: 지금 화면은 그대로 두고, 숨은 칸에서 새 장면을 다 불러온 뒤 바꿔요 (잠깐 까맣게 깜빡이지 않게)
+    const ok = await readyOnSpare(c.mediaId, st);
+    if (!ok || my !== token) return;
+    const old = video; video = spare; spare = old; old.pause(); old.dataset.for = '';
+  } else {
+    await ensureSrc(c);
+    if (my !== token) return;
+  }
+  if (Math.abs(video.currentTime - st) > 0.001) video.currentTime = st;
+  video.playbackRate = clamp(c.speed * (playing ? shuttle : 1), 0.0625, 16);
   cur = c; setGain(c); video.style.display = 'block'; video.style.visibility = 'visible'; spare.pause(); spare.style.visibility = 'hidden'; spare.dataset.for = '';
   updateStage(); syncPip(); if (!silent) updateUI();
 }
