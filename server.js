@@ -1457,6 +1457,15 @@ async function mgIngest(file, alphaFile, name, hash) {
   if (alphaFile && fs.existsSync(alphaFile)) fs.copyFileSync(alphaFile, alphaPathOf(id));
   const m = await ingest(id, name, dest, '.mp4'); m.mg = true; m.mgHash = hash; media[id] = m; saveDB(); return m;
 }
+// AI가 만든 HTML 은 편집기와 다른 주소(127.0.0.1 ↔ localhost)에서 열어요. 그래야 브라우저가 따로 떼어 돌려서,
+// HTML 이 무한 반복에 빠져도 편집기 화면은 멈추지 않고, 시간이 지나면 그 칸만 꺼요.
+const mgBoxes = {};
+function mgBoxGet(req, res, p) {
+  const r = mgBoxes[p.slice(8)]; delete mgBoxes[p.slice(8)];
+  if (!r || Date.now() - r.at > 120000) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data: blob:; sandbox allow-scripts" });
+  res.end(r.doc);
+}
 async function handleMg(req, res, p, u) {
   if (req.method === 'GET' && p === '/api/mg/html') {   // AI가 작업 폴더에 만든 모션그래픽 HTML 읽기 (작업 폴더 안의 .html 만)
     const jd = mgJobDir(u.searchParams.get('job')); const rel = String(u.searchParams.get('f') || '');
@@ -1477,6 +1486,12 @@ async function handleMg(req, res, p, u) {
     return json(res, r.dead ? 500 : 200, r.dead ? { error: '영상 만들기에 실패했어요' + (r.err ? ': ' + r.err.slice(-300) : '') } : { ok: true });
   }
   const b = await readBody(req).catch(() => ({}));
+  if (p === '/api/mg/box') {
+    const doc = String(b.doc || ''); if (!doc || doc.length > 4e6) return json(res, 400, { error: '모션그래픽 파일이 너무 커요' });
+    Object.keys(mgBoxes).forEach((k) => { if (Date.now() - mgBoxes[k].at > 120000) delete mgBoxes[k]; });
+    if (Object.keys(mgBoxes).length >= 5) return json(res, 429, { error: '모션그래픽을 이미 만들고 있어요. 잠시 뒤에 다시 해 주세요' });
+    const id = crypto.randomBytes(12).toString('hex'); mgBoxes[id] = { doc, at: Date.now() }; return json(res, 200, { id });
+  }
   if (p === '/api/mg/find') {   // 이미 만든 같은 모션그래픽이 있으면 그대로 써요
     const h = String(b.hash || ''); if (!MG_HASH.test(h)) return json(res, 200, {});
     const hit = Object.values(media).find((m) => m.mg && m.mgHash === h && fs.existsSync(m.file));
@@ -1535,6 +1550,7 @@ function fromOutside(req) {
   return false;
 }
 const server = http.createServer(async (req, res) => {
+  if (req.method === 'GET' && /^\/mg-box\/[0-9a-f]{24}$/.test(String(req.url || '')) && OK_HOSTS.has(String(req.headers.host || '').toLowerCase())) return mgBoxGet(req, res, req.url);   // 모션그래픽 칸: 편집기가 맡긴 글만 한 번 돌려줘요 (다른 곳에서 열 수 없게 긴 무작위 번호)
   if (fromOutside(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Forbidden'); }
   const u = new URL(req.url, 'http://localhost');
   let p; try { p = decodeURIComponent(u.pathname); } catch (e) { res.writeHead(400); return res.end(); }

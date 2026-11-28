@@ -309,9 +309,13 @@
     const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts'); fr.style.cssText = `position:fixed;left:-99999px;top:0;width:${Math.min(W, 1920)}px;height:${Math.min(H, 1920)}px;border:0;opacity:0;pointer-events:none`;
     // HTML 안의 바깥 글꼴·스크립트 주소는 어차피 막히지만, 기다리지 않게 미리 지워요
     const clean = String(html).replace(/<link\b[^>]*>/gi, '').replace(/<script\b[^>]*\bsrc\s*=[^>]*>\s*<\/script>/gi, '').replace(/@import[^;]+;/gi, '');
-    fr.srcdoc = harness(W, H) + clean; document.body.append(fr);
+    const box = await post('/api/mg/box', { doc: harness(W, H) + clean }); if (box.error) throw new Error(box.error);
+    const other = location.hostname === '127.0.0.1' ? 'localhost' : '127.0.0.1';   // 편집기와 다른 주소 → 따로 떼어 돌아가요
+    fr.src = `${location.protocol}//${other}:${location.port}/mg-box/${box.id}`; document.body.append(fr);
     let pending = null; const onMsg = (e) => { if (e.source !== fr.contentWindow || !e.data || !e.data.mg) return; const p = pending; pending = null; if (p) (e.data.err ? p.no(new Error(e.data.err)) : p.ok(e.data)); };
     window.addEventListener('message', onMsg);
+    const kill = () => { pending = null; fr.remove(); window.removeEventListener('message', onMsg); };
+    try {
     const ask = (msg, tr, ms) => new Promise((ok, no) => { pending = { ok, no }; fr.contentWindow.postMessage(msg, '*', tr || []); setTimeout(() => { if (pending) { pending = null; no(new Error('모션그래픽 HTML이 응답하지 않아요')); } }, ms || 15000); });
     await new Promise((ok) => { fr.onload = ok; setTimeout(ok, 4000); });
     const fams = new Set([TF, BF]); const want = []; const seen = new Set();
@@ -320,8 +324,9 @@
     for (const [nm, to] of want) { const b = await fontBuf(to); if (b) list.push({ name: nm, buf: b.slice(0) }); }
     await ask({ cmd: 'fonts', list }, list.map((x) => x.buf), 20000);
     const info = await ask({ cmd: 'info' });
-    if (!info.has) { fr.remove(); window.removeEventListener('message', onMsg); throw new Error('모션그래픽 HTML에 canvas 와 window.draw(t) 가 없어요'); }
-    return { dur: info.dur, frame: async (t) => (await ask({ cmd: 'frame', t, alpha }, [], 20000)).buf, close: () => { fr.remove(); window.removeEventListener('message', onMsg); } };
+    if (!info.has) throw new Error('모션그래픽 HTML에 canvas 와 window.draw(t) 가 없어요');
+    return { dur: info.dur, frame: async (t) => { try { return (await ask({ cmd: 'frame', t, alpha }, [], 10000)).buf; } catch (e) { kill(); throw e; } }, close: kill };
+    } catch (e) { kill(); throw e; }   // 응답이 없으면(무한 반복 등) 그 칸을 꺼요 → 이 모션그래픽만 건너뛰어요
   }
 
   // ---- 영상 파일로 만들기 ----
