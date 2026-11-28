@@ -2197,6 +2197,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
     const info = await fetch('/api/auto/jobs').then((r) => r.json()).catch(() => null);
     if (!info) return toast('서버에 연결할 수 없어요');
     let sel = info.jobs.find((j) => j.path === ld(JK, '')) || info.jobs[0] || null, ratio = ld(RK, '9:16'), ai = ld('vtk.autoai.v1', 'codex'), skillOpen = false, aiOpen = false;   // 주로 쓰는 AI는 기억해 둬요
+    const skillMemo = {}, sttMemo = {};   // 메뉴를 누를 때마다 화면을 다시 그려도, 전에 받아 둔 내용을 바로 보여 줘서 아래쪽이 깜빡이지 않게 해요
     let opt = {}; try { opt = JSON.parse(ld('vtk.autoopt.v1', '{}')); } catch (e) {} const saveOpt = () => sv('vtk.autoopt.v1', JSON.stringify(opt));
     const d = E('div', 'dlg auto-dlg', '<h2>AI 자동 편집</h2>');
     const xb = E('button', 'auto-x', '✕ 닫기'); xb.onclick = closeModal; d.insertBefore(xb, d.firstChild);
@@ -2330,7 +2331,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       Rt.append(tabs, E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt)));
       const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
       { // 🎤 받아 적기: 편집기가 작업 폴더의 영상 말소리를 먼저 글로 받아 적어 "받아적기" 폴더에 둬요 (AI가 그 시각으로 컷·자막을 만들어요)
-        const sb = E('button', '', '🎤 받아 적기'), at = sel.path; sb.title = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)';
+        const at = sel.path, sm = sttMemo[at], sb = E('button', '', sm ? sm.t : '🎤 받아 적기'); if (sm) sb.disabled = sm.d; sb.title = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)';
         let polling = false;
         const paint = (st) => {
           if (!st || st.error) return; const j = st.job;
@@ -2341,11 +2342,12 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
           sb.textContent = st.files && st.done >= st.files ? `✅ 받아 적기 끝 (${st.done}개)` : st.done ? `🎤 받아 적기 (${st.done}/${st.files})` : '🎤 받아 적기';
           return false;
         };
+        const paint0 = paint; const paintM = (st) => { const v = paint0(st); sttMemo[at] = { t: sb.textContent, d: sb.disabled }; return v; };
         const wait = () => new Promise((r) => setTimeout(r, 900));
         const poll = async (started) => { if (polling) return; polling = true; let sawDl = false, sawRun = !!started;
           while (sel && sel.path === at && document.body.contains(sb)) {
             const st = await fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).catch(() => null); if (!st || st.error) break;
-            if (paint(st)) { if (st.dl.state === 'running') sawDl = true; else sawRun = true; await wait(); continue; }
+            if (paintM(st)) { if (st.dl.state === 'running') sawDl = true; else sawRun = true; await wait(); continue; }
             if (sawDl && st.have && !sawRun) { sawDl = false; const z = await post('/api/auto/stt', { path: at }); if (z.error) { toast(z.error, null, 6000); break; } sawRun = true; await wait(); continue; }   // 모델을 다 받았으면 바로 받아 적어요
             if (sawRun && st.job.mine && st.job.state === 'error') toast(st.job.err, null, 7000);
             else if (sawRun && st.job.mine && st.job.state === 'done') toast(st.files ? `받아 적었어요 (${st.done}/${st.files}개) → 받아적기 폴더` : '받아 적을 영상이 폴더에 없어요', null, 5000);
@@ -2353,15 +2355,15 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
           }
           polling = false; };
         sb.onclick = async () => { const z = await post('/api/auto/stt', { path: at }); if (z.error) return toast(z.error, null, 6000); sb.disabled = true; poll(!!z.ok); };
-        fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).then((st) => { if (paint(st)) poll(); }).catch(() => {});
+        fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).then((st) => { if (paintM(st)) poll(); }).catch(() => {});
         row.append(sb);
       }
       if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }
       Rt.append(row);
       { // 작업 폴더에 복사된 스킬 (단동샘스킬 폴더)
         const sk = E('div'); Rt.append(sk); const at = sel.path;
-        fetch('/api/auto/skill?path=' + encodeURIComponent(at)).then((x) => x.json()).then((r) => {
-          if (!sel || sel.path !== at || r.error || !r.exists) return;
+        const fill = (r) => {
+          sk.innerHTML = ''; if (r.error || !r.exists) return;
           sk.append(E('div', 'asub', '복사된 스킬'));
           const ln = E('div', 'apath', esc('📦 단동샘스킬 · 파일 ' + r.files.length + '개')); ln.title = r.dir + '\n' + r.files.join('\n'); sk.append(ln);
           const br = E('div', 'abtns'); const vb = E('button', '', skillOpen ? '📖 스킬 접기' : '📖 스킬 보기'); vb.title = 'SKILL.md 내용 보기';
@@ -2376,6 +2378,12 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
             mv.onclick = () => { mbox.hidden = !mbox.hidden; mv.textContent = mbox.hidden ? '📖 스킬 보기' : '📖 스킬 접기'; }; mf.onclick = async () => { const z = await post('/api/auto/openfolder', { path: r.motion.dir }); if (z.error) toast(z.error); };
             mb.append(mv, mf); sk.append(mb, mbox);
           }
+        };
+        if (skillMemo[at]) fill(skillMemo[at].r);
+        fetch('/api/auto/skill?path=' + encodeURIComponent(at)).then((x) => x.json()).then((r) => {
+          const key = JSON.stringify(r), old = skillMemo[at]; skillMemo[at] = { r, key };
+          if (!sel || sel.path !== at || !document.body.contains(sk)) return;
+          if (!old || old.key !== key) fill(r);   // 바뀐 게 있을 때만 다시 그려요
         }).catch(() => {});
       }
       // 결과
