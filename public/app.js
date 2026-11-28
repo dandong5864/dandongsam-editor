@@ -2350,31 +2350,38 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e
       Rt.append(tabs, E('div', 'ahow', esc(AI[ai].how)), E('div', 'abox', esc(AI[ai].prompt)));
       const row = E('div', 'abtns'); const cb = E('button', 'primary', '📋 스킬 복사'); cb.onclick = async () => { await copy(AI[ai].prompt); cb.textContent = '✅ 복사했어요'; setTimeout(() => { cb.textContent = '📋 스킬 복사'; }, 2000); }; row.append(cb);
       { // 🎤 받아 적기: 편집기가 작업 폴더의 영상 말소리를 먼저 글로 받아 적어 "받아적기" 폴더에 둬요 (AI가 그 시각으로 컷·자막을 만들어요)
-        const at = sel.path, sm = sttMemo[at], sb = E('button', '', sm ? sm.t : '🎤 받아 적기'); if (sm) sb.disabled = sm.d; sb.title = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)';
+        const at = sel.path, sm = sttMemo[at], sb = E('button', '', sm ? sm.t : '🎤 받아 적기'); if (sm) sb.disabled = sm.d; const tip0 = '편집기가 이 폴더 영상의 말을 미리 받아 적어 "받아적기" 폴더에 둬요. AI가 이걸로 말 없는 구간을 자르고 자막을 만들어요 (ChatGPT는 이 파일도 첨부)'; sb.title = sm && sm.r ? '누르면 멈춰요' : tip0; if (sm && sm.r) sb.dataset.run = '1';
         let polling = false;
         const paint = (st) => {
           if (!st || st.error) return; const j = st.job;
           if (st.dl.state === 'running') { sb.textContent = `⬇ 음성 인식 모델 받는 중 ${st.dl.pct}%`; sb.disabled = true; return true; }
-          if (j.mine && j.state === 'running') { sb.textContent = `⏳ 받아 적는 중 ${j.pct}%`; sb.disabled = true; return true; }
+          if (j.mine && j.state === 'running') { sb.textContent = `⏳ 받아 적는 중 ${j.total ? `${j.idx}/${j.total} · ` : ''}${j.pct}%`; sb.disabled = false; sb.dataset.run = '1'; sb.title = '누르면 멈춰요'; return true; }   // 받아 적는 동안 누르면 멈출 수 있어요
+          delete sb.dataset.run; sb.title = tip0;
           sb.disabled = false;
-          if (st.dl.state === 'error') { sb.textContent = '🎤 받아 적기'; toast(st.dl.msg, null, 7000); return false; }
+          if (st.dl.state === 'error' && !st.have) { sb.textContent = '🎤 받아 적기'; toast(st.dl.msg, null, 7000); return false; }
           sb.textContent = st.files && st.done >= st.files ? `✅ 받아 적기 끝 (${st.done}개)` : st.done ? `🎤 받아 적기 (${st.done}/${st.files})` : '🎤 받아 적기';
           return false;
         };
-        const paint0 = paint; const paintM = (st) => { const v = paint0(st); sttMemo[at] = { t: sb.textContent, d: sb.disabled }; return v; };
+        const paint0 = paint; const paintM = (st) => { const v = paint0(st); sttMemo[at] = { t: sb.textContent, d: sb.disabled, r: !!sb.dataset.run }; return v; };
         const wait = () => new Promise((r) => setTimeout(r, 900));
         const poll = async (started) => { if (polling) return; polling = true; let sawDl = false, sawRun = !!started;
+          let fail = 0;
           while (sel && sel.path === at && document.body.contains(sb)) {
-            const st = await fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).catch(() => null); if (!st || st.error) break;
+            const st = await fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).catch(() => null);
+            if (!st || st.error) { if (++fail < 5) { await wait(); continue; } sb.textContent = '🎤 받아 적기'; sb.disabled = false; delete sb.dataset.run; sb.title = tip0; delete sttMemo[at]; toast(st && st.error ? st.error : '편집기와 연결이 끊겼어요. 편집기를 다시 켜 주세요', null, 7000); break; }   // 응답이 없으면 0%에 멈춰 있지 않고 알려 줘요
+            fail = 0;
             if (paintM(st)) { if (st.dl.state === 'running') sawDl = true; else sawRun = true; await wait(); continue; }
             if (sawDl && st.have && !sawRun) { sawDl = false; const z = await post('/api/auto/stt', { path: at }); if (z.error) { toast(z.error, null, 6000); break; } sawRun = true; await wait(); continue; }   // 모델을 다 받았으면 바로 받아 적어요
             if (sawRun && st.job.mine && st.job.state === 'error') toast(st.job.err, null, 7000);
+            else if (sawRun && st.job.mine && st.job.state === 'stopped') toast(`멈췄어요 (${st.done}/${st.files}개 받아 적음)`, null, 4000);
             else if (sawRun && st.job.mine && st.job.state === 'done') toast(st.files ? `받아 적었어요 (${st.done}/${st.files}개) → 받아적기 폴더` : '받아 적을 영상이 폴더에 없어요', null, 5000);
             break;
           }
           polling = false; };
-        sb.onclick = async () => { const z = await post('/api/auto/stt', { path: at }); if (z.error) return toast(z.error, null, 6000); sb.disabled = true; poll(!!z.ok); };
-        fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).then((st) => { if (paintM(st)) poll(); }).catch(() => {});
+        sb.onclick = async () => {
+          if (sb.dataset.run) { if (!(await ask('받아 적기를 멈출까요?\n다 받아 적은 파일은 그대로 남아요.', { ok: '멈추기' }))) return; sb.disabled = true; await post('/api/stt/stop', {}); poll(true); return; }
+          const z = await post('/api/auto/stt', { path: at }); if (z.error) return toast(z.error, null, 6000); sb.disabled = true; poll(!!z.ok); };
+        fetch('/api/auto/stt?path=' + encodeURIComponent(at)).then((x) => x.json()).catch(() => null).then((st) => { if (st && !st.error ? paintM(st) : sm && (sm.r || sm.d)) poll(); });   // 응답이 없는데 전에 '받아 적는 중'이었으면 다시 확인해서 알려 줘요
         row.append(sb);
       }
       if (AI[ai].term) { const tb = E('button', '', '▶ Claude Code 열기'); tb.onclick = async () => { const z = await post('/api/auto/terminal', { path: sel.path }); if (z.error) toast(z.error, null, 6000); }; row.append(tb); }

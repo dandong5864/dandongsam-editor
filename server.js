@@ -1018,7 +1018,7 @@ function jobInfo(dir, kind) {
 }
 function autoJobs() {
   const c = autoCfg(), jobs = [];
-  try { fs.readdirSync(c.root, { withFileTypes: true }).forEach((e) => { if (e.isDirectory() && e.name !== '결과' && !e.name.startsWith('.')) { const j = jobInfo(path.join(c.root, e.name), 'root'); if (j) jobs.push(j); } }); } catch (e) {}
+  try { fs.readdirSync(c.root, { withFileTypes: true }).forEach((e) => { if (e.isDirectory() && e.name !== '결과' && e.name !== AUTO_STT_DIR && !SKILL_NAMES.includes(e.name) && !e.name.startsWith('.')) { const j = jobInfo(path.join(c.root, e.name), 'root'); if (j) jobs.push(j); } }); } catch (e) {}
   if (fs.existsSync(path.join(c.root, '결과'))) { const j = jobInfo(c.root, 'legacy'); if (j) jobs.push(j); }
   c.extra.forEach((p) => { const j = jobInfo(p, 'extra'); if (j) jobs.push(j); });
   jobs.sort((a, b) => b.mtime - a.mtime); return { root: c.root, sep: path.sep, jobs };
@@ -1402,19 +1402,21 @@ function toWordJson(raw, len) {   // 낱말 조각(앞 공백 = 새 낱말) → 
   return segs.map((g) => ({ start: +g.start.toFixed(3), end: +Math.min(len, g.end).toFixed(3), text: g.text, words: g.words }));
 }
 async function autoSttRun(dir, force) {
-  const J = stt.job = { state: 'running', pct: 0, msg: '준비하는 중…', segs: [], err: '', auto: dir, made: 0, skipped: 0, silent: 0 }; sttStop = false;
+  const J = stt.job = { state: 'running', pct: 0, msg: '준비하는 중…', segs: [], err: '', auto: dir, made: 0, skipped: 0, silent: 0, idx: 0, total: 0 }; sttStop = false;
   try {
     const files = autoSttTargets(dir).filter((f) => { if (!force && autoSttDone(f)) { J.skipped++; return false; } return true; });
+    J.total = files.length;   // 몇 번째 파일인지 버튼에 보여 줘요 (0%에 오래 머물러도 멈춘 게 아닌 걸 알 수 있게)
     const save = (f, len, segs, extra) => { const op = autoSttOut(f); fs.mkdirSync(path.dirname(op), { recursive: true }); fs.writeFileSync(op, JSON.stringify({ file: path.basename(f), src: fileStamp(f), duration: +(+len || 0).toFixed(3), by: '단동샘 편집기', ...extra, segments: segs }, null, 1), 'utf8'); };
-    const infos = []; for (const f of files) { let i = null; try { i = await probe(f); } catch (e) {} if (i && i.hasAudio && i.duration > 0.3) infos.push({ f, len: i.duration }); else { J.silent++; try { save(f, i && i.duration, [], { noAudio: true }); } catch (e) {} } }   // 소리 없는 영상도 "소리 없음"으로 적어 둬요
-    if (infos.length && !sttCtx) {
+    const infos = []; for (const f of files) { if (sttStop) break; let i = null; try { i = await probe(f); } catch (e) {} if (i && i.hasAudio && i.duration > 0.3) infos.push({ f, len: i.duration }); else { J.silent++; try { save(f, i && i.duration, [], { noAudio: true }); } catch (e) {} } }   // 소리 없는 영상도 "소리 없음"으로 적어 둬요
+    J.total = infos.length;
+    if (infos.length && !sttCtx && !sttStop) {
       let mod; try { mod = require('@fugood/whisper.node'); } catch (e) { throw new Error('음성 인식 구성요소를 불러오지 못했어요 (' + e.message.split('\n')[0] + ')'); }
-      J.msg = '음성 인식 모델을 켜는 중… (처음엔 조금 걸려요)'; sttCtx = await mod.initWhisper({ filePath: STT_FILE, useGpu: false });
+      J.msg = '음성 인식 모델을 켜는 중… (처음엔 조금 걸려요)'; try { sttCtx = await mod.initWhisper({ filePath: STT_FILE, useGpu: false }); } catch (e) { throw new Error('음성 인식 모델을 켜지 못했어요. 편집기를 다시 켜 보세요 (' + String(e.message || e).split('\n')[0] + ')'); }
     }
     const total = infos.reduce((a, x) => a + x.len, 0) || 1; let done = 0;
     for (let i = 0; i < infos.length; i++) {
       if (sttStop) break;
-      const { f, len } = infos[i]; J.msg = `받아 적는 중… ${path.basename(f)} (${i + 1}/${infos.length})`;
+      const { f, len } = infos[i]; J.idx = i + 1; J.msg = `받아 적는 중… ${path.basename(f)} (${i + 1}/${infos.length})`;
       const pcm = await pcmOf(f, 0, len); const raw = [];
       if (pcm.length >= 3200) {
         const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2)), base = done;
@@ -1665,7 +1667,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/auto/stt') {   // 받아 적기 상태 (작업 폴더 기준)
       const dir = path.resolve(String(u.searchParams.get('path') || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
       const files = autoSttTargets(dir), done = files.filter(autoSttDone).length, J = stt.job;
-      return json(res, 200, { have: sttHave(), dl: stt.dl, files: files.length, done, job: { state: J.state, pct: J.pct, msg: J.msg, err: J.err, mine: J.auto === dir, made: J.made || 0, skipped: J.skipped || 0, silent: J.silent || 0 } });
+      return json(res, 200, { have: sttHave(), dl: stt.dl, files: files.length, done, job: { state: J.state, pct: J.pct, msg: J.msg, err: J.err, mine: J.auto === dir, made: J.made || 0, skipped: J.skipped || 0, silent: J.silent || 0, idx: J.idx || 0, total: J.total || 0 } });
     }
     if (req.method === 'POST' && p === '/api/auto/stt') {
       const b = await readBody(req); const dir = path.resolve(String(b.path || '')); if (!autoAllowed(dir) || !fs.existsSync(dir)) return json(res, 400, { error: '작업 폴더를 찾을 수 없어요' });
