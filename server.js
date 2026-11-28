@@ -297,16 +297,28 @@ function backupBefore(id, file, force) {
   const d = path.join(BAK_DIR, bakKey(id)); try { fs.mkdirSync(d, { recursive: true }); writeSafe(path.join(d, Date.now() + '.json'), JSON.stringify(old)); pruneBak(id); } catch (e) { console.error('백업', e.message); }
 }
 // ---- 스티커 (이미지 / GIF) ----
-const STICKER_DIR = path.join(ROOT, '스티커'); const STICKER_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-try { fs.mkdirSync(STICKER_DIR, { recursive: true }); } catch (e) {}
+// 내가 추가한 스티커·효과음은 프로그램 폴더가 아니라 '단동샘 편집기' 사용자 폴더(내보내기 옆)에 둬요 → 다시 설치하거나 지워도 남아요
+const STICKER_DIR = path.join(USER_BASE, '스티커'), STICKER_OLD = path.join(ROOT, '스티커'); const STICKER_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+const SFX_OWN = path.join(USER_BASE, '효과음'), SFX_APP = path.join(ROOT, '효과음');   // SFX_APP: 편집기에 들어 있는 효과음 (예전에 추가한 것도 여기 있을 수 있어요)
+try { fs.mkdirSync(STICKER_DIR, { recursive: true }); fs.mkdirSync(SFX_OWN, { recursive: true }); } catch (e) {}
+(function moveOldUserFiles() {   // 예전 버전이 프로그램 폴더에 저장한 것을 한 번 옮겨요 (스티커는 옮긴 뒤 원래 것을 지우고, 효과음은 복사만)
+  const flag = path.join(WS, 'moved-user-files.json'); if (fs.existsSync(flag)) return;
+  const cp = (src, dst, rel, del, depth) => { let es = []; try { es = fs.readdirSync(path.join(src, rel), { withFileTypes: true }); } catch (e) { return true; } let ok = true;
+    for (const e of es) { const r = path.join(rel, e.name), a = path.join(src, r), b = path.join(dst, r);
+      if (e.isDirectory()) { if (depth < 3 && !(depth === 0 && e.name === '기본 효과음')) ok = cp(src, dst, r, del, depth + 1) && ok; continue; }
+      if (!e.isFile() || /\.txt$/i.test(e.name)) continue;
+      try { fs.mkdirSync(path.dirname(b), { recursive: true }); if (!fs.existsSync(b)) fs.copyFileSync(a, b); if (fs.statSync(b).size !== fs.statSync(a).size) { ok = false; continue; } if (del) try { fs.unlinkSync(a); } catch (x) {} } catch (x) { ok = false; } }
+    return ok; };
+  const ok = cp(STICKER_OLD, STICKER_DIR, '', true, 3) & cp(SFX_APP, SFX_OWN, '', false, 0);
+  if (ok) try { fs.writeFileSync(flag, JSON.stringify({ at: Date.now() })); } catch (e) {}
+})();
 const BUILTIN_STK = path.join(ROOT, '기본스티커');   // 편집기에 처음부터 들어 있는 스티커(지우거나 바꿀 수 없어요)
-const stkPath = (n) => { const b = path.basename(String(n || '')); const a = path.join(STICKER_DIR, b); return fs.existsSync(a) ? a : path.join(BUILTIN_STK, b); };
+const stkPath = (n) => { const b = path.basename(String(n || '')); return [STICKER_DIR, STICKER_OLD, BUILTIN_STK].map((d) => path.join(d, b)).find((f) => fs.existsSync(f)) || path.join(BUILTIN_STK, b); };
 
 // ---- 효과음 폴더 ----
 const SETTINGS = path.join(WS, 'settings.json');
 const loadSettings = () => { try { return JSON.parse(fs.readFileSync(SETTINGS, 'utf8')); } catch (e) { return {}; } };
 const getSfxDir = () => { const s = loadSettings(); return s.sfxDir !== undefined ? s.sfxDir : ''; };
-const SFX_OWN = path.join(ROOT, '효과음'); fs.mkdirSync(SFX_OWN, { recursive: true });
 const AUDIO_EXT = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma'];
 function walkAudio(root, rel, depth) {
   let out = []; let ents = []; try { ents = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch (e) { return out; }
@@ -320,7 +332,7 @@ function walkAudio(root, rel, depth) {
 }
 function sfxPath(rel) {
   rel = String(rel || ''); let base = getSfxDir();
-  if (rel.startsWith('@/')) { base = SFX_OWN; rel = rel.slice(2); }
+  if (rel.startsWith('@/')) { rel = rel.slice(2); base = SFX_OWN; const own = path.resolve(SFX_OWN, rel); if (!fs.existsSync(own) && own.startsWith(path.resolve(SFX_OWN) + path.sep)) base = SFX_APP; }   // 내 폴더에 없으면 편집기에 들어 있는 효과음
   const root = path.resolve(base || '.'); if (!rel || !base) return null;
   const f = path.resolve(root, rel); if (!f.startsWith(root + path.sep)) return null;
   if (!AUDIO_EXT.includes(path.extname(f).toLowerCase())) return null;
@@ -1825,7 +1837,8 @@ const server = http.createServer(async (req, res) => {
       const dir = getSfxDir(); let files = [], exists = false;
       try { exists = fs.statSync(dir).isDirectory(); } catch (e) {}
       if (exists) files = walkAudio(dir, '', 0);
-      const own = walkAudio(SFX_OWN, '', 0).map((x) => ({ name: x.name, rel: '@/' + x.rel, own: true }));
+      const mine = walkAudio(SFX_OWN, '', 0), mset = new Set(mine.map((x) => x.rel));
+      const own = mine.concat(walkAudio(SFX_APP, '', 0).filter((x) => !mset.has(x.rel))).sort((a, b) => a.rel.localeCompare(b.rel, 'ko')).map((x) => ({ name: x.name, rel: '@/' + x.rel, own: true }));
       const ownSet = new Set(own.map((x) => x.rel.slice(2)));
       const pending = files.filter((x) => !ownSet.has(x.rel)).length;
       return json(res, 200, { dir, exists, files: [...own, ...files.filter((x) => !ownSet.has(x.rel))], ownDir: SFX_OWN, pending });
@@ -1884,7 +1897,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 500, { error: '동영상 파일이 망가져서 열 수 없어요' });
     }
     if (p === '/api/stickers' && req.method === 'GET') {
-      let fl = []; try { fl = fs.readdirSync(STICKER_DIR).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}
+      const rd = (d) => { try { return fs.readdirSync(d).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())); } catch (e) { return []; } };
+      const fl = [...new Set(rd(STICKER_DIR).concat(rd(STICKER_OLD)))].sort();
       let bl = []; try { bl = fs.readdirSync(BUILTIN_STK).filter((f) => STICKER_EXT.includes(path.extname(f).toLowerCase())).sort(); } catch (e) {}
       return json(res, 200, fl.map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: /\.gif$/i.test(f) })).concat(bl.filter((f) => !fl.includes(f)).map((f) => ({ id: f, name: f.replace(/\.[^.]+$/, ''), gif: false, builtin: true, name: f.replace(/\.[^.]+$/, '').replace(/^단축키_(.*)$/, '$1 (키보드)').replace(/^텍스트_(.*)$/, '$1 (글자)') }))));
     }
@@ -1897,8 +1911,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, id: nm });
     }
     if (p === '/api/sticker/delete' && req.method === 'POST') {
-      const f = path.join(STICKER_DIR, path.basename(u.searchParams.get('n') || '')); if (!fs.existsSync(f)) return json(res, 404, { error: '없는 스티커예요' });
-      try { fs.unlinkSync(f); } catch (e) { return json(res, 500, { error: '지우지 못했어요' }); }
+      const nm = path.basename(u.searchParams.get('n') || ''), fs2 = [STICKER_DIR, STICKER_OLD].map((d) => path.join(d, nm)).filter((f) => nm && fs.existsSync(f)); if (!fs2.length) return json(res, 404, { error: '없는 스티커예요' });
+      try { fs2.forEach((f) => fs.unlinkSync(f)); } catch (e) { return json(res, 500, { error: '지우지 못했어요' }); }
       return json(res, 200, { ok: true });
     }
     if (p === '/api/sticker/file' && req.method === 'GET') {
